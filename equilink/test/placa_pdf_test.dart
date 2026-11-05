@@ -40,7 +40,8 @@ void main() {
       expect(texto, contains('ISABEL TORO LEO'));
       expect(texto, contains('Registro P341234'));
       expect(texto, contains('18/08/2018'));
-      expect(texto, contains('12 provas, 5 vitórias'));
+      expect(texto, contains('/cavalo/P341234'));
+      expect(texto, isNot(contains('provas')));
     });
 
     test('os formatos declaram as dimensões físicas esperadas', () {

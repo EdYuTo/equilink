@@ -38,6 +38,9 @@ flutter:
     - assets/img/
     - assets/video/
   fonts:
+    - family: LibreBaskerville
+      fonts:
+        - asset: assets/fonts/LibreBaskerville-Variavel.ttf
     - family: Poppins
       fonts:
         - asset: assets/fonts/Poppins-Regular.ttf

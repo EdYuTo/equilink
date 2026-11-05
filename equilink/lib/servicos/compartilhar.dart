@@ -15,7 +15,7 @@ abstract final class IdentidadeCavalo {
       'Pelagem: ${cavalo.pelagem}\n'
       'Proprietário: ${cavalo.proprietario.nome} — ${cavalo.proprietario.fazenda}\n'
       'Criador: ${cavalo.criador.nome} — ${cavalo.criador.cidade}\n'
-      'Histórico: ${cavalo.provas.length} provas, ${cavalo.vitorias} vitórias';
+      '${ContextoPerfil(cavalo: cavalo).urlPublica}';
 
   static String _data(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';

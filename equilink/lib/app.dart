@@ -11,13 +11,19 @@ import 'package:equilink_ui/equilink_ui.dart';
 import 'widgets/visualizador_midia.dart';
 
 class EquiLinkApp extends StatefulWidget {
-  const EquiLinkApp({super.key, this.fonte, this.analytics});
+  const EquiLinkApp({super.key, this.fonte, this.analytics, this.baias = false, this.sessaoInicial});
 
   /// Permite injetar uma fonte nos testes; em produção vem de [Ambiente].
   final FonteDeDados? fonte;
 
   /// Permite injetar a telemetria nos testes; em produção vem de [Ambiente].
   final Analytics? analytics;
+
+  /// Liga o módulo de baias, fora da v1. Só os testes desse módulo o usam hoje.
+  final bool baias;
+
+  /// Permite aos testes abrir o app com alguém já conectado.
+  final Sessao? sessaoInicial;
 
   @override
   State<EquiLinkApp> createState() => _EquiLinkAppState();
@@ -27,7 +33,10 @@ class _EquiLinkAppState extends State<EquiLinkApp> {
   late final Repositorio _repositorio;
   late final Analytics _analytics;
   final _visualizador = VisualizadorController();
-  late final _roteador = criarRoteador(_registrarNavegacao);
+  late final _roteador = criarRoteador(
+    aoNavegar: _registrarNavegacao,
+    baias: widget.baias,
+  );
 
   /// Cliente de sessão; `null` no modo demonstração (fonte em memória).
   late final SessaoApi? _sessaoApi = Ambiente.criarSessao();
@@ -38,6 +47,7 @@ class _EquiLinkAppState extends State<EquiLinkApp> {
   @override
   void initState() {
     super.initState();
+    _sessao = widget.sessaoInicial;
     _analytics = widget.analytics ?? Analytics(Ambiente.criarColetor());
     _repositorio = Repositorio(
       widget.fonte ?? Ambiente.criarFonte(),
