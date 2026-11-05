@@ -26,6 +26,8 @@
 //   * Erro interno não vaza mensagem do banco: vai para o log com um id.
 
 import { neon } from '@neondatabase/serverless';
+import { normalizarAncestral } from './genealogia.js';
+import { ErroValidacao, objeto, texto } from './validacao.js';
 import {
   acessoDe,
   conferirSenha,
@@ -112,27 +114,6 @@ async function lerJson(request) {
   }
 }
 
-class ErroValidacao extends Error {
-  constructor(mensagem, status = 400) {
-    super(mensagem);
-    this.status = status;
-  }
-}
-
-/** Texto curto, sem controle, truncado. */
-function texto(valor, campo, { max = 500, obrigatorio = false, padrao = '' } = {}) {
-  if (valor == null || valor === '') {
-    if (obrigatorio) throw new ErroValidacao(`Campo obrigatório ausente: ${campo}.`);
-    return padrao;
-  }
-  if (typeof valor !== 'string' && typeof valor !== 'number') {
-    throw new ErroValidacao(`Campo ${campo} deve ser texto.`);
-  }
-  const s = String(valor).replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
-  if (obrigatorio && !s) throw new ErroValidacao(`Campo obrigatório ausente: ${campo}.`);
-  return s.slice(0, max);
-}
-
 /** Identificador: só letras, números, hífen, sublinhado, ponto e dois-pontos. */
 function identificador(valor, campo) {
   const s = texto(valor, campo, { max: 120, obrigatorio: true });
@@ -147,14 +128,6 @@ function listaDe(valor, campo) {
   if (!Array.isArray(valor)) throw new ErroValidacao(`Campo ${campo} deve ser uma lista.`);
   if (valor.length > LIMITE_ARRAY) {
     throw new ErroValidacao(`Campo ${campo} excede ${LIMITE_ARRAY} itens.`, 413);
-  }
-  return valor;
-}
-
-function objeto(valor, campo) {
-  if (valor == null) return {};
-  if (typeof valor !== 'object' || Array.isArray(valor)) {
-    throw new ErroValidacao(`Campo ${campo} deve ser um objeto.`);
   }
   return valor;
 }
@@ -369,7 +342,9 @@ async function gravarCavalo(sql, harasId, c) {
       altura = excluded.altura, peso = excluded.peso, descricao = excluded.descricao,
       foto_perfil = excluded.foto_perfil, principal = excluded.principal,
       proprietario = excluded.proprietario, criador = excluded.criador,
-      pai = excluded.pai, mae = excluded.mae, sgpe_url = excluded.sgpe_url,
+      pai = excluded.pai, mae = excluded.mae,
+      -- Os clientes não conhecem este campo: sem valor novo, o atual fica.
+      sgpe_url = coalesce(excluded.sgpe_url, cavalos.sgpe_url),
       atualizado_em = now()
   `;
 
@@ -513,7 +488,9 @@ async function gravarAcervoEmLote(sql, harasId, acervo) {
       altura = excluded.altura, peso = excluded.peso, descricao = excluded.descricao,
       foto_perfil = excluded.foto_perfil, principal = excluded.principal,
       proprietario = excluded.proprietario, criador = excluded.criador,
-      pai = excluded.pai, mae = excluded.mae, sgpe_url = excluded.sgpe_url,
+      pai = excluded.pai, mae = excluded.mae,
+      -- Os clientes não conhecem este campo: sem valor novo, o atual fica.
+      sgpe_url = coalesce(excluded.sgpe_url, cavalos.sgpe_url),
       atualizado_em = now()
   `;
 
@@ -1181,14 +1158,8 @@ function normalizarCavalo(bruto, idForcado) {
       nome: texto(c.criador?.nome, 'criador.nome', { max: 120 }),
       cidade: texto(c.criador?.cidade, 'criador.cidade', { max: 120 }),
     },
-    pai: {
-      nome: texto(c.pai?.nome, 'pai.nome', { max: 120 }),
-      registro: texto(c.pai?.registro, 'pai.registro', { max: 40 }),
-    },
-    mae: {
-      nome: texto(c.mae?.nome, 'mae.nome', { max: 120 }),
-      registro: texto(c.mae?.registro, 'mae.registro', { max: 40 }),
-    },
+    pai: normalizarAncestral(c.pai, 'pai'),
+    mae: normalizarAncestral(c.mae, 'mae'),
     sgpeUrl: urlSegura(c.sgpeUrl, 'sgpeUrl'),
     provas: listaDe(c.provas, 'provas').map((p) => normalizarProva(p, null)),
     midias: listaDe(c.midias, 'midias').map((m) => normalizarMidia(m, null)),
