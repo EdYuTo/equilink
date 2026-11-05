@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:equilink/app.dart';
 import 'package:equilink_core/equilink_core.dart';
 import 'package:equilink/telas/acesso.dart';
 import 'package:equilink/telas/baias.dart';
+import 'package:equilink/telas/genealogia.dart';
+import 'package:equilink/telas/perfil.dart';
+import 'package:equilink/telas/placa.dart';
+import 'package:equilink/widgets/marca.dart';
 import 'package:equilink/core/sessao_escopo.dart';
 
 void main() {
@@ -151,22 +156,22 @@ void main() {
       await tester.pumpWidget(EquiLinkApp(fonte: FonteMemoria()));
       await tester.pumpAndSettle();
 
-      expect(find.text('Detalhes do Cavalo'), findsOneWidget);
+      expect(find.text('DETALHES'), findsOneWidget);
+      expect(find.byType(LogoEquilink), findsOneWidget);
       expect(find.text('ISABEL TORO LEO'), findsOneWidget);
       expect(find.textContaining('P341234'), findsWidgets);
     });
 
     testWidgets('navega pelos módulos principais', (tester) async {
       await usarTelaDeCelular(tester);
-      await tester.pumpWidget(EquiLinkApp(fonte: FonteMemoria()));
+      await tester.pumpWidget(EquiLinkApp(baias: true, fonte: FonteMemoria()));
       await tester.pumpAndSettle();
 
       await irPara(tester, 'Genealogia');
-      expect(find.text('ÁRVORE DE ASCENDENTES'), findsOneWidget);
+      expect(find.text('BISAVÓS'), findsOneWidget);
       expect(find.textContaining('LEO DO VALE'), findsWidgets);
 
       await irPara(tester, 'Histórico');
-      expect(find.text('Histórico Esportivo'), findsOneWidget);
       expect(find.text('Estatísticas'), findsOneWidget);
 
       await irPara(tester, 'Baias');
@@ -176,7 +181,7 @@ void main() {
 
     testWidgets('conclui uma tarefa de manejo pela lista consolidada', (tester) async {
       await usarTelaDeCelular(tester);
-      await tester.pumpWidget(EquiLinkApp(fonte: FonteMemoria()));
+      await tester.pumpWidget(EquiLinkApp(baias: true, fonte: FonteMemoria()));
       await tester.pumpAndSettle();
 
       await irPara(tester, 'Baias');
@@ -196,26 +201,44 @@ void main() {
       expect(find.textContaining('registrada como concluída'), findsOneWidget);
     });
 
-    testWidgets('abre a placa de identificação com o QR Code', (tester) async {
+    testWidgets('visitante não vê a placa, nem pelo link direto', (tester) async {
       await usarTelaDeCelular(tester);
       await tester.pumpWidget(EquiLinkApp(fonte: FonteMemoria()));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Placa de identificação'));
+      expect(find.text('Placa de identificação'), findsNothing);
+
+      GoRouter.of(tester.element(find.byType(TelaPerfil))).push('/placa');
       await tester.pumpAndSettle();
 
+      expect(find.byType(TelaPlaca), findsNothing);
+      expect(find.byType(QrImageView), findsNothing);
+      expect(find.text('Acesso do proprietário'), findsOneWidget);
+    });
 
-      expect(find.text('Placa de identificação'), findsOneWidget);
-      expect(find.byType(QrImageView), findsOneWidget);
-      expect(
-        find.textContaining('equilink.quarto-de-milha.workers.dev/cavalo/P341234'),
-        findsWidgets,
+    testWidgets('quem entrou abre a placa de identificação pelo perfil', (tester) async {
+      await usarTelaDeCelular(tester);
+      await tester.pumpWidget(
+        EquiLinkApp(
+          fonte: FonteMemoria(),
+          sessaoInicial: const Sessao(usuario: 'teste', harasId: 'h1', papel: 'leitor'),
+        ),
       );
+      await tester.pumpAndSettle();
+
+      final botao = find.text('Placa de identificação');
+      await tester.scrollUntilVisible(botao, 300, scrollable: find.byType(Scrollable).first);
+      await tester.pumpAndSettle();
+      await tester.tap(botao);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TelaPlaca), findsOneWidget);
+      expect(find.byType(QrImageView), findsOneWidget);
     });
 
     testWidgets('abre os detalhes da baia com a rotina de manejo', (tester) async {
       await usarTelaDeCelular(tester);
-      await tester.pumpWidget(EquiLinkApp(fonte: FonteMemoria()));
+      await tester.pumpWidget(EquiLinkApp(baias: true, fonte: FonteMemoria()));
       await tester.pumpAndSettle();
 
       await irPara(tester, 'Baias');
@@ -230,7 +253,7 @@ void main() {
 
     testWidgets('o visualizador de mídia cobre a navegação principal', (tester) async {
       await usarTelaDeCelular(tester);
-      await tester.pumpWidget(EquiLinkApp(fonte: FonteMemoria()));
+      await tester.pumpWidget(EquiLinkApp(baias: true, fonte: FonteMemoria()));
       await tester.pumpAndSettle();
 
       await irPara(tester, 'Fotos');
@@ -250,7 +273,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(InteractiveViewer), findsOneWidget);
-      expect(find.text('Fotos e Vídeos'), findsOneWidget);
       expect(find.text('Meus cavalos'), findsNothing);
 
       // Fechar o visualizador devolve o controle da navegação.
@@ -260,6 +282,99 @@ void main() {
 
       await irPara(tester, 'Baias');
       expect(find.text('Meus cavalos'), findsOneWidget);
+    });
+  });
+
+  group('v1: perfil público', () {
+    Future<void> abrir(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(EquiLinkApp(fonte: FonteMemoria()));
+      await tester.pumpAndSettle();
+    }
+
+    Finder destino(String rotulo) =>
+        find.descendant(of: find.byType(NavigationBar), matching: find.text(rotulo));
+
+    testWidgets('baias ficam fora da navegação e o link antigo abre o perfil', (tester) async {
+      await abrir(tester);
+      expect(destino('Baias'), findsNothing);
+      expect(find.byType(NavigationDestination), findsNWidgets(4));
+
+      GoRouter.of(tester.element(find.byType(TelaPerfil))).go('/baias');
+      await tester.pumpAndSettle();
+      expect(find.text('DETALHES'), findsOneWidget);
+    });
+
+    testWidgets('perfil mostra os detalhes e esconde placa e edição do visitante', (tester) async {
+      await abrir(tester);
+      for (final rotulo in ['PROPRIETÁRIO', 'CRIADOR', 'NASCIMENTO', 'SEXO', 'PELAGEM', 'REGISTRO', 'PAI', 'MÃE']) {
+        expect(find.text(rotulo), findsWidgets, reason: rotulo);
+      }
+      expect(find.byTooltip('Placa de identificação'), findsNothing);
+      expect(find.textContaining('QR Code'), findsNothing);
+      expect(find.text('Editar'), findsNothing);
+      expect(find.byTooltip('Acesso do proprietário'), findsOneWidget);
+    });
+
+    testWidgets('genealogia mostra só a árvore e tocar abre a ficha do ancestral', (tester) async {
+      await abrir(tester);
+      await tester.tap(destino('Genealogia'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('PAIS'), findsOneWidget);
+      expect(find.text('Lista'), findsNothing);
+      expect(find.text('Ancestrais'), findsNothing);
+      expect(find.text('Profundidade da árvore'), findsNothing);
+
+      final cavalo = FonteMemoria.acervoDeDemonstracao().principal!;
+      await tester.tap(find.text(cavalo.pai.nome.toUpperCase()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('PAI'), findsWidgets);
+      expect(find.textContaining('Ver a genealogia de'), findsOneWidget);
+
+      await tester.tap(find.textContaining('Ver a genealogia de'));
+      await tester.pumpAndSettle();
+      expect(find.text(cavalo.pai.nome), findsOneWidget);
+      expect(find.text('BISAVÓS'), findsWidgets);
+    });
+
+    testWidgets('o zoom da árvore respeita os limites', (tester) async {
+      await abrir(tester);
+      await tester.tap(destino('Genealogia'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('100%'), findsOneWidget);
+      await tester.tap(find.byTooltip('Aumentar zoom'));
+      await tester.pumpAndSettle();
+      expect(find.text('125%'), findsOneWidget);
+      await tester.tap(find.byTooltip('Diminuir zoom'));
+      await tester.pumpAndSettle();
+      expect(find.text('100%'), findsOneWidget);
+    });
+
+    test('a árvore tem 14 posições e nomeia cada ramo', () {
+      final slots = montarSlots(const Ancestral(nome: 'RAIZ', registro: 'R'));
+      expect(slots, hasLength(14));
+      expect(slots.where((s) => s.geracao == 1), hasLength(2));
+      expect(slots.where((s) => s.geracao == 2), hasLength(4));
+      expect(slots.where((s) => s.geracao == 3), hasLength(8));
+      expect(slots.every((s) => s.ancestral == null), isTrue);
+      expect(slots.map((s) => s.papel), containsAll(['Pai', 'Mãe', 'Avô materno', 'Avó paterna', 'Bisavó materna']));
+    });
+
+    test('ancestral sem nome conta como não informado e não abre ramo', () {
+      final slots = montarSlots(
+        const Ancestral(
+          nome: 'RAIZ',
+          registro: 'R',
+          pai: Ancestral(nome: '', registro: '', pai: Ancestral(nome: 'OCULTO', registro: 'X')),
+          mae: Ancestral(nome: 'MAE', registro: 'M'),
+        ),
+      );
+      expect(slots.where((s) => s.ancestral != null).map((s) => s.ancestral!.nome), ['MAE']);
     });
   });
 

@@ -13,6 +13,7 @@ import 'telas/midias.dart';
 import 'telas/perfil.dart';
 import 'telas/acesso.dart';
 import 'telas/placa.dart';
+import 'widgets/marca.dart';
 
 
 /// Largura máxima do conteúdo em telas grandes (web e tablets).
@@ -41,7 +42,10 @@ class Rotas {
 
 /// Cria o roteador. [aoNavegar] recebe cada rota visitada, para a telemetria
 /// registrar a jornada sem que as telas conheçam o analytics.
-GoRouter criarRoteador([void Function(String rota)? aoNavegar]) {
+///
+/// [baias] liga o módulo de baias e manejo, que fica fora da v1. O código segue
+/// no projeto para a versão futura.
+GoRouter criarRoteador({void Function(String rota)? aoNavegar, bool baias = false}) {
   final chaveRaiz = GlobalKey<NavigatorState>();
 
   return GoRouter(
@@ -55,6 +59,7 @@ GoRouter criarRoteador([void Function(String rota)? aoNavegar]) {
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => _MolduraPrincipal(
           navigationShell: navigationShell,
+          itens: baias ? _itens : _itens.sublist(0, 4),
         ),
         branches: [
           StatefulShellBranch(
@@ -86,7 +91,7 @@ GoRouter criarRoteador([void Function(String rota)? aoNavegar]) {
               GoRoute(path: Rotas.midias, builder: (context, state) => const TelaMidias()),
             ],
           ),
-          StatefulShellBranch(
+          if (baias) StatefulShellBranch(
             routes: [
               GoRoute(
                 path: Rotas.baias,
@@ -103,10 +108,21 @@ GoRouter criarRoteador([void Function(String rota)? aoNavegar]) {
           ),
         ],
       ),
+      // Links antigos para o módulo desligado abrem o perfil, sem erro.
+      if (!baias)
+        GoRoute(
+          path: '${Rotas.baias}/:numero',
+          redirect: (context, state) => Rotas.perfil,
+        ),
+      if (!baias)
+        GoRoute(
+          path: Rotas.baias,
+          redirect: (context, state) => Rotas.perfil,
+        ),
       GoRoute(
         path: Rotas.placa,
         parentNavigatorKey: chaveRaiz,
-        builder: (context, state) => const TelaPlaca(),
+        builder: (context, state) => const PortaoAcesso(child: TelaPlaca()),
       ),
       GoRoute(
         path: Rotas.acesso,
@@ -127,6 +143,21 @@ GoRouter criarRoteador([void Function(String rota)? aoNavegar]) {
       ),
     ],
   );
+}
+
+/// Mostra [child] só para quem entrou; os demais veem a tela de acesso.
+///
+/// Ao entrar, a sessão muda e o conteúdo aparece sem nova navegação. Ao
+/// recarregar a página, o acesso aparece por um instante até a sessão ser
+/// restaurada, e o conteúdo protegido nunca é desenhado antes disso.
+class PortaoAcesso extends StatelessWidget {
+  const PortaoAcesso({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) =>
+      SessaoEscopo.de(context).autenticado ? child : const TelaAcesso();
 }
 
 /// Observa as trocas de rota e as repassa para a telemetria.
@@ -160,9 +191,10 @@ const _itens = <_ItemNavegacao>[
 ];
 
 class _MolduraPrincipal extends StatelessWidget {
-  const _MolduraPrincipal({required this.navigationShell});
+  const _MolduraPrincipal({required this.navigationShell, required this.itens});
 
   final StatefulNavigationShell navigationShell;
+  final List<_ItemNavegacao> itens;
 
   void _selecionar(int indice) {
     navigationShell.goBranch(
@@ -193,6 +225,7 @@ class _MolduraPrincipal extends StatelessWidget {
             _BarraLateral(
               indice: navigationShell.currentIndex,
               aoSelecionar: _selecionar,
+              itens: itens,
               pendencias: repositorio.manejoPendenteTotal,
             ),
             Expanded(child: ColoredBox(color: Cores.fundo, child: conteudo)),
@@ -211,18 +244,18 @@ class _MolduraPrincipal extends StatelessWidget {
           selectedIndex: navigationShell.currentIndex,
           onDestinationSelected: _selecionar,
           destinations: [
-            for (var i = 0; i < _itens.length; i++)
+            for (var i = 0; i < itens.length; i++)
               NavigationDestination(
                 icon: _IconeComSelo(
-                  icone: _itens[i].icone,
+                  icone: itens[i].icone,
                   contagem: i == 4 ? repositorio.manejoPendenteTotal : 0,
                 ),
                 selectedIcon: _IconeComSelo(
-                  icone: _itens[i].iconeAtivo,
+                  icone: itens[i].iconeAtivo,
                   cor: Cores.douradoClaro,
                   contagem: i == 4 ? repositorio.manejoPendenteTotal : 0,
                 ),
-                label: _itens[i].rotulo,
+                label: itens[i].rotulo,
               ),
           ],
         ),
@@ -235,11 +268,13 @@ class _BarraLateral extends StatelessWidget {
   const _BarraLateral({
     required this.indice,
     required this.aoSelecionar,
+    required this.itens,
     required this.pendencias,
   });
 
   final int indice;
   final ValueChanged<int> aoSelecionar;
+  final List<_ItemNavegacao> itens;
   final int pendencias;
 
   @override
@@ -260,15 +295,7 @@ class _BarraLateral extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'EQUILINK',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.1,
-                            color: Colors.white,
-                          ),
-                        ),
+                        LogoEquilink(tamanho: 13, traco: 16),
                         SizedBox(height: 4),
                         Text(
                           'Meus cavalos',
@@ -277,19 +304,19 @@ class _BarraLateral extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const _BotaoAcesso(),
+                  const BotaoAcesso(),
                 ],
               ),
             ),
-            for (var i = 0; i < _itens.length; i++)
+            for (var i = 0; i < itens.length; i++)
               _DestinoLateral(
-                item: _itens[i],
+                item: itens[i],
                 ativo: i == indice,
                 contagem: i == 4 ? pendencias : 0,
                 aoTocar: () => aoSelecionar(i),
               ),
             const Spacer(),
-            Padding(
+            if (itens.length > 4) Padding(
               padding: const EdgeInsets.all(Espacos.x5),
               child: Text(
                 pendencias == 0
@@ -399,27 +426,23 @@ class _IconeComSelo extends StatelessWidget {
 /// Selo de acesso: mostra o usuário quando conectado, ou o convite para entrar.
 ///
 /// O aplicativo é público; este é o único ponto de entrada do proprietário.
-class _BotaoAcesso extends StatelessWidget {
-  const _BotaoAcesso();
+class BotaoAcesso extends StatelessWidget {
+  const BotaoAcesso({super.key});
 
   @override
   Widget build(BuildContext context) {
     final sessao = SessaoEscopo.de(context);
     final conectado = sessao.autenticado;
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: () => context.push(Rotas.acesso),
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: Icon(
-          conectado ? Icons.verified_user : Icons.person_outline,
-          size: 20,
-          color: conectado ? Cores.verde : Colors.white54,
-          semanticLabel: conectado
-              ? 'Conectado como ${sessao.sessao!.usuario}'
-              : 'Acesso do proprietário',
-        ),
+    return IconButton(
+      tooltip: conectado
+          ? 'Conectado como ${sessao.sessao!.usuario}'
+          : 'Acesso do proprietário',
+      onPressed: () => context.push(Rotas.acesso),
+      icon: Icon(
+        conectado ? Icons.verified_user : Icons.person_outline,
+        size: 22,
+        color: conectado ? Cores.verde : Colors.white70,
       ),
     );
   }

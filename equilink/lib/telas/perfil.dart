@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:equilink_core/equilink_core.dart';
+import '../core/sessao_escopo.dart';
 import '../core/tema.dart';
 import '../escopo.dart';
 import '../rotas.dart';
 import '../servicos/compartilhar.dart';
 import '../widgets/comuns.dart';
+import '../widgets/marca.dart';
 import '../widgets/visualizador_midia.dart';
 
 /// Tela "Detalhes do Cavalo": identificação, mídias, ficha técnica,
@@ -37,7 +39,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
     final erroFoco = repositorio.erroFoco;
     if (erroFoco != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Detalhes do Cavalo')),
+        appBar: AppBar(title: const LogoEquilink()),
         body: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
@@ -85,12 +87,11 @@ class _TelaPerfilState extends State<TelaPerfil> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Detalhes do Cavalo'),
-        leading: IconButton(
-          tooltip: 'Placa de identificação',
-          icon: const Icon(Icons.qr_code_2, size: 24),
-          onPressed: () => context.push(Rotas.placa),
-        ),
+        title: const LogoEquilink(),
+        // Na tela larga, o acesso já está na barra lateral.
+        leading: MediaQuery.sizeOf(context).width < larguraNavegacaoLateral
+            ? const BotaoAcesso()
+            : null,
         actions: [
           IconButton(
             tooltip: 'Compartilhar perfil',
@@ -104,6 +105,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
         padding: const EdgeInsets.only(bottom: Espacos.x6),
         children: [
           _Carrossel(
+            capa: cavalo.fotoPerfil,
             fotos: fotos,
             controlador: _controladorCarrossel,
             pagina: _paginaCarrossel,
@@ -128,68 +130,51 @@ class _TelaPerfilState extends State<TelaPerfil> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Text(
+                  cavalo.nome,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.3,
+                    height: 1.15,
+                    color: Cores.texto,
+                  ),
+                ),
+                const SizedBox(height: Espacos.x1),
+                Text(
+                  '${cavalo.raca} · ${cavalo.registro}',
+                  style: const TextStyle(fontSize: 12.5, color: Cores.textoSecundario),
+                ),
+                const SizedBox(height: Espacos.x2),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(Raios.pequeno),
-                      child: ImagemMidia(
-                        cavalo.fotoPerfil,
-                        largura: 64,
-                        altura: 64,
-                        ajuste: BoxFit.cover,
-                      ),
+                    Etiqueta(
+                      cavalo.sexo.rotulo,
+                      cor: cavalo.sexo == Sexo.macho ? Cores.azul : Cores.dourado,
+                      fundo: cavalo.sexo == Sexo.macho
+                          ? Cores.azulFundo
+                          : Cores.dourado.withValues(alpha: 0.14),
+                      compacta: true,
                     ),
-                    const SizedBox(width: Espacos.x3),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            cavalo.nome,
-                            style: const TextStyle(
-                              fontSize: 21,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.3,
-                              height: 1.15,
-                              color: Cores.texto,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '${cavalo.registro}  |  ${cavalo.sexo.rotulo}  |  '
-                            '${dataCurta(cavalo.nascimento)}  |  ${cavalo.pelagem}',
-                            style: const TextStyle(
-                              fontSize: 12.5,
-                              color: Cores.textoSecundario,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              Etiqueta(
-                                '${cavalo.vitorias} vitórias',
-                                cor: Cores.verde,
-                                fundo: Cores.verdeFundo,
-                                icone: Icons.emoji_events,
-                                compacta: true,
-                              ),
-                              Etiqueta(
-                                'Registro ABQM',
-                                cor: Cores.dourado,
-                                fundo: Cores.dourado.withValues(alpha: 0.14),
-                                icone: Icons.verified,
-                                compacta: true,
-                              ),
-                            ],
-                          ),
-                        ],
+                    if (cavalo.pelagem.trim().isNotEmpty)
+                      Etiqueta(
+                        cavalo.pelagem,
+                        cor: Cores.textoSecundario,
+                        fundo: Cores.trilho,
+                        compacta: true,
                       ),
+                    Etiqueta(
+                      dataCurta(cavalo.nascimento),
+                      cor: Cores.textoSecundario,
+                      fundo: Cores.trilho,
+                      compacta: true,
                     ),
                   ],
                 ),
+                const SizedBox(height: Espacos.x3),
+                _BlocoDetalhes(cavalo: cavalo),
                 const SizedBox(height: Espacos.x4),
                 AbasPilula(
                   abas: const ['Fotos', 'Vídeos', 'Genealogia', 'Histórico'],
@@ -217,106 +202,31 @@ class _TelaPerfilState extends State<TelaPerfil> {
                   _ => _ResumoHistorico(cavalo: cavalo),
                 },
                 const SizedBox(height: Espacos.x5),
-                Painel(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const TituloSecao('Proprietário'),
-                      const SizedBox(height: Espacos.x3),
-                      _LinhaContato(
-                        icone: Icons.person_outline,
-                        rotulo: 'Nome',
-                        valor: cavalo.proprietario.nome,
-                      ),
-                      _LinhaContato(
-                        icone: Icons.home_outlined,
-                        rotulo: 'Fazenda',
-                        valor: cavalo.proprietario.fazenda,
-                      ),
-                      _LinhaContato(
-                        icone: Icons.phone_outlined,
-                        rotulo: 'Telefone',
-                        valor: telefone(cavalo.proprietario.telefone),
-                      ),
-                      _LinhaContato(
-                        icone: Icons.location_on_outlined,
-                        rotulo: 'Localização',
-                        valor: cavalo.proprietario.cidade,
-                        ultima: true,
-                      ),
-                      const Divider(height: Espacos.x5),
-                      const TituloSecao('Criador'),
-                      const SizedBox(height: Espacos.x3),
-                      _LinhaContato(
-                        icone: Icons.agriculture_outlined,
-                        rotulo: 'Criador',
-                        valor: cavalo.criador.nome,
-                      ),
-                      _LinhaContato(
-                        icone: Icons.place_outlined,
-                        rotulo: 'Cidade',
-                        valor: cavalo.criador.cidade,
-                        ultima: true,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: Espacos.x4),
-                Painel(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const TituloSecao('Ficha técnica'),
-                      const SizedBox(height: Espacos.x4),
-                      Wrap(
-                        spacing: Espacos.x4,
-                        runSpacing: Espacos.x4,
-                        children: [
-                          _FichaItem(rotulo: 'Raça', valor: cavalo.raca),
-                          _FichaItem(rotulo: 'Sexo', valor: cavalo.sexo.rotulo),
-                          _FichaItem(
-                            rotulo: 'Nascimento',
-                            valor: dataCurta(cavalo.nascimento),
-                          ),
-                          _FichaItem(
-                            rotulo: 'Idade',
-                            valor: idade(
-                              cavalo.nascimento,
-                              referencia: repositorio.hoje,
-                            ),
-                          ),
-                          _FichaItem(rotulo: 'Pelagem', valor: cavalo.pelagem),
-                          _FichaItem(rotulo: 'Altura', valor: cavalo.altura),
-                          _FichaItem(rotulo: 'Peso', valor: cavalo.peso),
-                          _FichaItem(
-                            rotulo: 'Registro',
-                            valor: 'ABQM ${cavalo.registro}',
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: Espacos.x4),
+                if (cavalo.descricao.trim().isNotEmpty ||
+                    SessaoEscopo.de(context).podeVerManejo)
                 Painel(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       TituloSecao(
                         'Sobre o animal',
-                        acao: TextButton.icon(
-                          onPressed: () =>
-                              _editarDescricao(context, repositorio),
-                          icon: const Icon(Icons.edit_outlined, size: 16),
-                          label: const Text('Editar'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Cores.dourado,
-                            textStyle: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
+                        // Quem só visita o perfil não edita: o botão fica com
+                        // quem tem permissão de escrita.
+                        acao: SessaoEscopo.de(context).podeVerManejo
+                            ? TextButton.icon(
+                                onPressed: () =>
+                                    _editarDescricao(context, repositorio),
+                                icon: const Icon(Icons.edit_outlined, size: 16),
+                                label: const Text('Editar'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Cores.dourado,
+                                  textStyle: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              )
+                            : null,
                       ),
                       const SizedBox(height: Espacos.x2),
                       Text(
@@ -337,13 +247,15 @@ class _TelaPerfilState extends State<TelaPerfil> {
                   aoTocar: () =>
                       CompartilhamentoPerfil.compartilhar(context, repositorio),
                 ),
-                const SizedBox(height: Espacos.x3),
-                BotaoDourado(
-                  rotulo: 'Gerar placa de identificação (QR Code)',
-                  icone: Icons.qr_code_2,
-                  escuro: true,
-                  aoTocar: () => context.push(Rotas.placa),
-                ),
+                if (SessaoEscopo.de(context).autenticado) ...[
+                  const SizedBox(height: Espacos.x3),
+                  BotaoDourado(
+                    rotulo: 'Placa de identificação',
+                    icone: Icons.badge_outlined,
+                    escuro: true,
+                    aoTocar: () => context.push(Rotas.placa),
+                  ),
+                ],
               ],
             ),
           ),
@@ -399,8 +311,72 @@ class _TelaPerfilState extends State<TelaPerfil> {
   }
 }
 
+/// Bloco "Detalhes": os dados oficiais do animal, reunidos logo abaixo do nome,
+/// como na aba Detalhes da ABQM.
+class _BlocoDetalhes extends StatelessWidget {
+  const _BlocoDetalhes({required this.cavalo});
+
+  final Cavalo cavalo;
+
+  static String _ouPadrao(String texto) =>
+      texto.trim().isEmpty ? 'Não informado' : texto.trim();
+
+  static String _local(String primeiro, String segundo) =>
+      [primeiro, segundo].where((t) => t.trim().isNotEmpty).join(' · ');
+
+  @override
+  Widget build(BuildContext context) {
+    Widget par(String r1, String v1, String r2, String v2) => Padding(
+      padding: const EdgeInsets.only(top: Espacos.x3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: CampoInfo(rotulo: r1, valor: v1)),
+          const SizedBox(width: Espacos.x3),
+          Expanded(child: CampoInfo(rotulo: r2, valor: v2)),
+        ],
+      ),
+    );
+
+    return Painel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'DETALHES',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.6,
+              color: Cores.textoSecundario,
+            ),
+          ),
+          const SizedBox(height: Espacos.x3),
+          _LinhaContato(
+            icone: Icons.person_outline,
+            rotulo: 'Proprietário',
+            valor: _ouPadrao(cavalo.proprietario.nome),
+            complemento: _local(cavalo.proprietario.fazenda, cavalo.proprietario.cidade),
+          ),
+          _LinhaContato(
+            icone: Icons.agriculture_outlined,
+            rotulo: 'Criador',
+            valor: _ouPadrao(cavalo.criador.nome),
+            complemento: cavalo.criador.cidade,
+            ultima: true,
+          ),
+          par('Nascimento', dataCurta(cavalo.nascimento), 'Sexo', cavalo.sexo.rotulo),
+          par('Pelagem', _ouPadrao(cavalo.pelagem), 'Registro', _ouPadrao(cavalo.registro)),
+          par('Pai', _ouPadrao(cavalo.pai.nome), 'Mãe', _ouPadrao(cavalo.mae.nome)),
+        ],
+      ),
+    );
+  }
+}
+
 class _Carrossel extends StatelessWidget {
   const _Carrossel({
+    required this.capa,
     required this.fotos,
     required this.controlador,
     required this.pagina,
@@ -408,6 +384,8 @@ class _Carrossel extends StatelessWidget {
     required this.aoAbrirFoto,
   });
 
+  /// Foto de perfil, usada no topo quando o animal não tem fotos.
+  final String capa;
   final List<Midia> fotos;
   final PageController controlador;
   final int pagina;
@@ -416,29 +394,31 @@ class _Carrossel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Sem fotos, o carrossel vazio ocupava 214 px e mostrava "1/0" — o perfil
-    // abria com um buraco no topo e um contador sem sentido.
+    // Sem fotos na galeria, a foto de perfil ocupa o topo: o perfil nunca começa
+    // com um espaço vazio.
     if (fotos.isEmpty) {
-      return Container(
-        height: 132,
-        color: Cores.trilho,
-        alignment: Alignment.center,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.photo_library_outlined, size: 26, color: Cores.textoSecundario),
-            const SizedBox(height: Espacos.x2),
-            Text(
-              'Sem fotos cadastradas',
-              style: TextStyle(fontSize: 12.5, color: Cores.textoSecundario),
-            ),
-            const SizedBox(height: Espacos.x1),
-            Text(
-              'Use a foto de perfil abaixo para identificar o animal.',
-              style: TextStyle(fontSize: 11, color: Cores.textoSecundario),
-            ),
-          ],
-        ),
+      if (capa.trim().isEmpty) {
+        return Container(
+          height: 132,
+          color: Cores.trilho,
+          alignment: Alignment.center,
+          child: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.photo_library_outlined, size: 26, color: Cores.textoSecundario),
+              SizedBox(height: Espacos.x2),
+              Text(
+                'Sem fotos cadastradas',
+                style: TextStyle(fontSize: 12.5, color: Cores.textoSecundario),
+              ),
+            ],
+          ),
+        );
+      }
+      return SizedBox(
+        height: 214,
+        width: double.infinity,
+        child: ImagemMidia(capa, ajuste: BoxFit.cover),
       );
     }
 
@@ -776,12 +756,14 @@ class _LinhaContato extends StatelessWidget {
     required this.icone,
     required this.rotulo,
     required this.valor,
+    this.complemento = '',
     this.ultima = false,
   });
 
   final IconData icone;
   final String rotulo;
   final String valor;
+  final String complemento;
   final bool ultima;
 
   @override
@@ -813,26 +795,16 @@ class _LinhaContato extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
+                if (complemento.trim().isNotEmpty)
+                  Text(
+                    complemento,
+                    style: const TextStyle(fontSize: 12, color: Cores.textoSecundario),
+                  ),
               ],
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _FichaItem extends StatelessWidget {
-  const _FichaItem({required this.rotulo, required this.valor});
-
-  final String rotulo;
-  final String valor;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 140,
-      child: CampoInfo(rotulo: rotulo, valor: valor),
     );
   }
 }

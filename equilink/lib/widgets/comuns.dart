@@ -82,7 +82,7 @@ class _Aba extends StatelessWidget {
           child: Padding(
             // 10+10 com texto de 13 px dava 39 px de altura: abaixo do mínimo
             // de 44 para toque em celular.
-            padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 6),
+            padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 3),
             // FittedBox reduzia a linha inteira: em 320 px o rótulo quebrava
             // no meio ("Genealogi/a"). O texto agora encolhe sozinho, com
             // reticências quando não couber.
@@ -106,7 +106,7 @@ class _Aba extends StatelessWidget {
                   ),
                 ),
                 if (contagem != null) ...[
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                     decoration: BoxDecoration(
@@ -598,6 +598,8 @@ class ImagemMidia extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Animal ainda sem foto: mostra o aviso em vez de falhar ao carregar.
+    if (arquivo.trim().isEmpty) return placeholder ?? const _MidiaIndisponivel();
     if (!_remota) {
       return Image.asset(arquivo, fit: ajuste, width: largura, height: altura);
     }

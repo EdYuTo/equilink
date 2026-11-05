@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:equilink_ui/equilink_ui.dart';
 
 import '../core/tema.dart';
+import '../rotas.dart';
 import '../core/sessao_escopo.dart';
 import '../widgets/comuns.dart';
 
@@ -47,8 +49,12 @@ class TelaAcesso extends StatelessWidget {
       fundo: Cores.fundo,
       aoEntrar: escopo.entrar,
       titulo: 'Acesso do proprietário',
-      subtitulo: 'Entre para ver o manejo das suas baias.',
-      aoVoltar: () => Navigator.of(context).maybePop(),
+      subtitulo: 'Entre para gerenciar os seus cavalos.',
+      aoVoltar: () {
+        // Quem abriu o link direto não tem para onde voltar: vai ao perfil.
+        final navegador = Navigator.of(context);
+        navegador.canPop() ? navegador.pop() : context.go(Rotas.perfil);
+      },
     );
   }
 }

@@ -7,14 +7,14 @@ import 'package:equilink/app.dart';
 /// Prova que o aplicativo instrumenta a jornada do usuário de ponta a ponta:
 /// navegação, abertura de mídia, compartilhamento e geração de placa.
 void main() {
-  Future<ColetorMemoria> abrir(WidgetTester tester) async {
+  Future<ColetorMemoria> abrir(WidgetTester tester, {bool baias = false}) async {
     final coletor = ColetorMemoria();
     tester.view.physicalSize = const Size(430, 940);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(
-      EquiLinkApp(fonte: FonteMemoria(), analytics: Analytics(coletor)),
+      EquiLinkApp(fonte: FonteMemoria(), analytics: Analytics(coletor), baias: baias),
     );
     await tester.pumpAndSettle();
     return coletor;
@@ -38,7 +38,7 @@ void main() {
   });
 
   testWidgets('registra a jornada de navegação pelas telas', (tester) async {
-    final coletor = await abrir(tester);
+    final coletor = await abrir(tester, baias: true);
 
     await irPara(tester, 'Genealogia');
     await irPara(tester, 'Histórico');
@@ -77,7 +77,7 @@ void main() {
   });
 
   testWidgets('concluir manejo gera evento com a tarefa e o estado final', (tester) async {
-    final coletor = await abrir(tester);
+    final coletor = await abrir(tester, baias: true);
 
     await irPara(tester, 'Baias');
     await tester.tap(find.text('Manejo').first);
@@ -95,7 +95,7 @@ void main() {
   });
 
   testWidgets('toda a telemetria carrega sessão e a tela corrente', (tester) async {
-    final coletor = await abrir(tester);
+    final coletor = await abrir(tester, baias: true);
     await irPara(tester, 'Baias');
 
     expect(coletor.eventos, isNotEmpty);

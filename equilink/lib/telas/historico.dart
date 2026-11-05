@@ -4,6 +4,7 @@ import 'package:equilink_core/equilink_core.dart';
 import '../core/tema.dart';
 import '../escopo.dart';
 import '../widgets/comuns.dart';
+import '../widgets/marca.dart';
 
 /// Tela "Histórico Esportivo": provas disputadas, resultados detalhados e
 /// estatísticas de desempenho.
@@ -31,12 +32,7 @@ class _TelaHistoricoState extends State<TelaHistorico> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Histórico Esportivo'),
-        leading: IconButton(
-          tooltip: 'Voltar',
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
+        title: const LogoEquilink(),
       ),
       body: ListView(
         padding: const EdgeInsets.all(Espacos.x4),

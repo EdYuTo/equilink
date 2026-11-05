@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import 'package:equilink_core/equilink_core.dart';
 import '../core/tema.dart';
 import '../escopo.dart';
-import '../rotas.dart';
 import '../servicos/compartilhar.dart';
 import '../widgets/comuns.dart';
+import '../widgets/marca.dart';
 import '../widgets/visualizador_midia.dart';
 
 /// Tela "Fotos e Vídeos": galeria de mídias do cavalo com abas e grade.
@@ -39,12 +38,7 @@ class _TelaMidiasState extends State<TelaMidias> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Fotos e Vídeos'),
-        leading: IconButton(
-          tooltip: 'Placa de identificação',
-          icon: const Icon(Icons.qr_code_2, size: 24),
-          onPressed: () => context.push(Rotas.placa),
-        ),
+        title: const LogoEquilink(),
         actions: [
           IconButton(
             tooltip: 'Compartilhar galeria',
@@ -359,7 +353,7 @@ class _TelaMidiasState extends State<TelaMidias> {
                       Text(
                         '${plural(fotos.length, 'foto', 'fotos')} e '
                         '${plural(videos.length, 'vídeo', 'vídeos')} '
-                        'disponíveis na placa de identificação.',
+                        'disponíveis neste perfil.',
                         style: const TextStyle(
                           fontSize: 12,
                           color: Cores.textoSecundario,
