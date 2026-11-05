@@ -318,6 +318,15 @@ void main() {
       expect(find.byTooltip('Acesso do proprietário'), findsOneWidget);
     });
 
+    testWidgets('a aba Fotos não mostra QR Code ao visitante', (tester) async {
+      await abrir(tester);
+      await tester.tap(destino('Fotos'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(QrImageView), findsNothing);
+      expect(find.textContaining('QR Code'), findsNothing);
+    });
+
     testWidgets('genealogia mostra só a árvore e tocar abre a ficha do ancestral', (tester) async {
       await abrir(tester);
       await tester.tap(destino('Genealogia'));
