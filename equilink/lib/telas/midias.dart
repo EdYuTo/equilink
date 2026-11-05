@@ -328,44 +328,6 @@ class _TelaMidiasState extends State<TelaMidias> {
                   ),
               ],
             ),
-          const SizedBox(height: Espacos.x3),
-          Painel(
-            child: Row(
-              children: [
-                QrDoCavalo(
-                  dados: ContextoPerfil(cavalo: cavalo).urlPublica,
-                  tamanho: 74,
-                  padding: 2,
-                ),
-                const SizedBox(width: Espacos.x3),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Galeria vinculada ao QR Code',
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '${plural(fotos.length, 'foto', 'fotos')} e '
-                        '${plural(videos.length, 'vídeo', 'vídeos')} '
-                        'disponíveis neste perfil.',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Cores.textoSecundario,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: Espacos.x4),
           BotaoDourado(
             rotulo: 'Ver todas as fotos e vídeos',

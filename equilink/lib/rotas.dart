@@ -111,7 +111,7 @@ GoRouter criarRoteador({void Function(String rota)? aoNavegar, bool baias = fals
       // Links antigos para o módulo desligado abrem o perfil, sem erro.
       if (!baias)
         GoRoute(
-          path: '${Rotas.baias}/:numero',
+          path: '/baias/:numero',
           redirect: (context, state) => Rotas.perfil,
         ),
       if (!baias)
