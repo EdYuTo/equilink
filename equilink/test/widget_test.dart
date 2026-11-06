@@ -12,6 +12,7 @@ import 'package:equilink/telas/perfil.dart';
 import 'package:equilink/telas/placa.dart';
 import 'package:equilink/widgets/marca.dart';
 import 'package:equilink/core/sessao_escopo.dart';
+import 'package:equilink/escopo.dart';
 
 void main() {
   group('formatação pt-BR', () {
@@ -374,6 +375,18 @@ void main() {
       expect(slots.map((s) => s.papel), containsAll(['Pai', 'Mãe', 'Avô materno', 'Avó paterna', 'Bisavó materna']));
     });
 
+    test('ancestral gravado como travessão conta como não informado', () {
+      final slots = montarSlots(
+        const Ancestral(
+          nome: 'RAIZ',
+          registro: 'R',
+          pai: Ancestral(nome: '—', registro: '—'),
+          mae: Ancestral(nome: 'MAE', registro: '—'),
+        ),
+      );
+      expect(slots.where((s) => s.ancestral != null).map((s) => s.ancestral!.nome), ['MAE']);
+    });
+
     test('ancestral sem nome conta como não informado e não abre ramo', () {
       final slots = montarSlots(
         const Ancestral(
@@ -384,6 +397,90 @@ void main() {
         ),
       );
       expect(slots.where((s) => s.ancestral != null).map((s) => s.ancestral!.nome), ['MAE']);
+    });
+  });
+
+  group('link direto do animal', () {
+    const registro = 'P347821';
+    const nome = 'TORNADO DO VALE';
+
+    Future<void> abrirEm(WidgetTester tester, String rota) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      tester.binding.platformDispatcher.defaultRouteNameTestValue = rota;
+      addTearDown(tester.binding.platformDispatcher.clearDefaultRouteNameTestValue);
+      await tester.pumpWidget(EquiLinkApp(fonte: FonteMemoria()));
+      await tester.pumpAndSettle();
+    }
+
+    String urlAtual(WidgetTester tester) => GoRouter.of(
+      tester.element(find.byType(NavigationBar)),
+    ).routerDelegate.currentConfiguration.uri.toString();
+
+    Future<void> irPara(WidgetTester tester, String rotulo) async {
+      await tester.tap(
+        find.descendant(of: find.byType(NavigationBar), matching: find.text(rotulo)),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('abre o animal e mantém o endereço do link', (tester) async {
+      await abrirEm(tester, '/cavalo/$registro');
+      expect(find.text(nome), findsWidgets);
+      expect(find.text('ISABEL TORO LEO'), findsNothing);
+      expect(urlAtual(tester), '/cavalo/$registro');
+    });
+
+    testWidgets('as abas levam o animal na URL e voltam ao link', (tester) async {
+      await abrirEm(tester, '/cavalo/$registro');
+
+      await irPara(tester, 'Genealogia');
+      expect(urlAtual(tester), '/genealogia?cavalo=$registro');
+      expect(find.text(nome), findsOneWidget);
+
+      await irPara(tester, 'Perfil');
+      expect(urlAtual(tester), '/cavalo/$registro');
+
+      await irPara(tester, 'Perfil');
+      expect(urlAtual(tester), '/cavalo/$registro');
+    });
+
+    testWidgets('recarregar em outra aba continua no animal', (tester) async {
+      await abrirEm(tester, '/genealogia?cavalo=$registro');
+      expect(find.text(nome), findsOneWidget);
+      expect(find.text('ISABEL TORO LEO'), findsNothing);
+      expect(urlAtual(tester), '/genealogia?cavalo=$registro');
+    });
+
+    testWidgets('recarregar o acervo mantém o animal do link', (tester) async {
+      await abrirEm(tester, '/cavalo/$registro');
+      final contexto = tester.element(find.byType(NavigationBar));
+      await RepositorioEscopo.de(contexto).carregar();
+      await tester.pumpAndSettle();
+      expect(find.text(nome), findsWidgets);
+      expect(urlAtual(tester), '/cavalo/$registro');
+    });
+
+    testWidgets('sem link, o app continua no destaque', (tester) async {
+      await abrirEm(tester, '/perfil');
+      expect(find.text('ISABEL TORO LEO'), findsOneWidget);
+      expect(urlAtual(tester), '/perfil');
+    });
+
+    testWidgets('registro inexistente explica em vez de mostrar outro animal', (tester) async {
+      await abrirEm(tester, '/cavalo/NAO-EXISTE');
+      expect(find.textContaining('NAO-EXISTE'), findsOneWidget);
+      expect(find.text('ISABEL TORO LEO'), findsNothing);
+      expect(urlAtual(tester), '/cavalo/NAO-EXISTE');
+    });
+
+    testWidgets('sair do registro inexistente leva ao destaque', (tester) async {
+      await abrirEm(tester, '/cavalo/NAO-EXISTE');
+      await tester.tap(find.text('Ver o perfil em destaque'));
+      await tester.pumpAndSettle();
+      expect(find.text('ISABEL TORO LEO'), findsOneWidget);
+      expect(urlAtual(tester), '/perfil');
     });
   });
 

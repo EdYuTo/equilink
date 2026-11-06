@@ -319,7 +319,7 @@ class _BlocoDetalhes extends StatelessWidget {
   final Cavalo cavalo;
 
   static String _ouPadrao(String texto) =>
-      texto.trim().isEmpty ? 'Não informado' : texto.trim();
+      texto.trim().isEmpty || texto.trim() == '—' ? 'Não informado' : texto.trim();
 
   static String _local(String primeiro, String segundo) =>
       [primeiro, segundo].where((t) => t.trim().isNotEmpty).join(' · ');
