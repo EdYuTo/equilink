@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:equilink_core/equilink_core.dart';
 
+import 'package:equilink_admin/core/navegar_stub.dart';
 import 'package:equilink_admin/main.dart';
 
 void main() {
@@ -81,6 +82,13 @@ void main() {
     expect(find.text('Provas registradas'), findsOneWidget);
     expect(find.text('Melhor tempo dos meus cavalos'), findsOneWidget);
     expect(find.text('Três Tambores | Aberta'), findsWidgets);
+  });
+
+  testWidgets('o item Etiquetas sai do painel para a página própria', (tester) async {
+    await abrirPainel(tester);
+    await tester.tap(find.text('Etiquetas').first);
+    await tester.pump();
+    expect(ultimoEnderecoAberto, 'https://painel.equilinkapp.com.br/etiquetas');
   });
 }
 
