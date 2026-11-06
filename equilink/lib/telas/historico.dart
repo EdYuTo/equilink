@@ -308,7 +308,7 @@ class _ListaProvas extends StatelessWidget {
                         const _Separador(),
                         _Metrica(
                           rotulo: 'Premiação',
-                          valor: prova.premiacao ?? 'Não premiada',
+                          valor: prova.premiacao ?? '—',
                         ),
                       ],
                     ),
@@ -345,18 +345,20 @@ class _ListaResultados extends StatelessWidget {
         ),
       );
     }
+    // Sem local em nenhuma prova, a coluna vazia só tiraria espaço das outras.
+    final comLocal = provas.any((p) => p.local.trim().isNotEmpty);
     return Painel(
       padding: const EdgeInsets.all(Espacos.x3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const CabecalhoTabela(
-            colunas: ['Data', 'Prova', 'Local', 'Colocação', 'Tempo'],
-            flex: [3, 4, 4, 3, 3],
+          CabecalhoTabela(
+            colunas: ['Data', 'Prova', if (comLocal) 'Local', 'Pos.', 'Tempo'],
+            flex: [4, comLocal ? 5 : 8, if (comLocal) 4, 3, 4],
           ),
           const SizedBox(height: Espacos.x2),
           for (var i = 0; i < provas.length; i++) ...[
-            _LinhaResultado(prova: provas[i]),
+            _LinhaResultado(prova: provas[i], comLocal: comLocal),
             if (i != provas.length - 1) const Divider(height: Espacos.x3),
           ],
         ],
@@ -366,9 +368,10 @@ class _ListaResultados extends StatelessWidget {
 }
 
 class _LinhaResultado extends StatelessWidget {
-  const _LinhaResultado({required this.prova});
+  const _LinhaResultado({required this.prova, required this.comLocal});
 
   final Prova prova;
+  final bool comLocal;
 
   @override
   Widget build(BuildContext context) {
@@ -378,26 +381,28 @@ class _LinhaResultado extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            flex: 3,
+            flex: 4,
             child: Text(
-              dataCurta(prova.data),
+              // Ano com dois dígitos: com quatro, a data quebrava no celular.
+              dataCurta(prova.data).replaceRange(6, 8, ''),
               style: const TextStyle(fontSize: 12.5, color: Cores.textoSecundario),
             ),
           ),
           Expanded(
-            flex: 4,
+            flex: comLocal ? 5 : 8,
             child: Text(
               prova.nome,
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ),
-          Expanded(
-            flex: 4,
-            child: Text(
-              prova.local.replaceAll(RegExp(r'\s*-\s*[A-Z]{2}$'), ''),
-              style: const TextStyle(fontSize: 12.5, color: Cores.textoSecundario),
+          if (comLocal)
+            Expanded(
+              flex: 4,
+              child: Text(
+                prova.local.replaceAll(RegExp(r'\s*-\s*[A-Z]{2}$'), ''),
+                style: const TextStyle(fontSize: 12.5, color: Cores.textoSecundario),
+              ),
             ),
-          ),
           Expanded(
             flex: 3,
             child: Align(
@@ -411,7 +416,7 @@ class _LinhaResultado extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 3,
+            flex: 4,
             child: Text(
               tempoProvaCompacto(prova.tempoSegundos),
               style: const TextStyle(
