@@ -196,10 +196,13 @@ class _TelaGenealogiaState extends State<TelaGenealogia> {
   }
 }
 
-String _textoOuPadrao(String? valor) {
+/// O cadastro do painel grava "—" no lugar de um ancestral em branco.
+bool _informado(String? valor) {
   final texto = valor?.trim() ?? '';
-  return texto.isEmpty ? 'não informado' : texto;
+  return texto.isNotEmpty && texto != '—';
 }
+
+String _textoOuPadrao(String? valor) => _informado(valor) ? valor!.trim() : 'não informado';
 
 /// Uma posição da árvore: quem ocupa, ou `null` quando o ancestral não é conhecido.
 class SlotGenealogia {
@@ -227,7 +230,7 @@ class SlotGenealogia {
 /// Os 14 slots da árvore. Ancestrais sem nome contam como não informados,
 /// porque `Ancestral.fromJson({})` devolve um nó vazio em vez de `null`.
 List<SlotGenealogia> montarSlots(Ancestral raiz) {
-  Ancestral? valido(Ancestral? a) => a == null || a.nome.trim().isEmpty ? null : a;
+  Ancestral? valido(Ancestral? a) => a == null || !_informado(a.nome) ? null : a;
 
   final slots = <SlotGenealogia>[];
   void visitar(Ancestral? atual, int geracao, int indice, bool macho, String lado) {
@@ -363,7 +366,7 @@ class _CaixaAncestral extends StatelessWidget {
     }
 
     final detalhes = [
-      if (ancestral.registro.trim().isNotEmpty) ancestral.registro.trim(),
+      if (_informado(ancestral.registro)) ancestral.registro.trim(),
       if (ancestral.pelagem?.trim().isNotEmpty ?? false) ancestral.pelagem!.trim(),
     ];
 

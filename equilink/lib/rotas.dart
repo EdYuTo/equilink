@@ -31,6 +31,9 @@ class Rotas {
   static const baias = '/baias';
   static const placa = '/placa';
 
+  /// Parâmetro que mantém o animal do link nas outras abas.
+  static const parametroCavalo = 'cavalo';
+
   /// Acesso do proprietário (opcional: o app funciona anônimo).
   static const acesso = '/acesso';
 
@@ -51,6 +54,7 @@ GoRouter criarRoteador({void Function(String rota)? aoNavegar, bool baias = fals
   return GoRouter(
     navigatorKey: chaveRaiz,
     initialLocation: Rotas.perfil,
+    redirect: _manterAnimalNaUrl,
     observers: [
       if (aoNavegar != null)
         _ObservadorNavegacao(aoNavegar),
@@ -60,12 +64,19 @@ GoRouter criarRoteador({void Function(String rota)? aoNavegar, bool baias = fals
         builder: (context, state, navigationShell) => _MolduraPrincipal(
           navigationShell: navigationShell,
           itens: baias ? _itens : _itens.sublist(0, 4),
+          registroDaUrl: _registroDaUrl(state),
         ),
         branches: [
           StatefulShellBranch(
             routes: [
               GoRoute(
                 path: Rotas.perfil,
+                builder: (context, state) => const TelaPerfil(),
+              ),
+              // Link direto de um animal. O registro fica na URL para o animal
+              // continuar na tela ao recarregar a página.
+              GoRoute(
+                path: '/cavalo/:registro',
                 builder: (context, state) => const TelaPerfil(),
               ),
             ],
@@ -129,20 +140,65 @@ GoRouter criarRoteador({void Function(String rota)? aoNavegar, bool baias = fals
         parentNavigatorKey: chaveRaiz,
         builder: (context, state) => const TelaAcesso(),
       ),
-      // Alvo do QR Code da placa: /cavalo/<registro>. Redireciona para o
-      // perfil, que passa a exibir o animal pedido em vez do destaque.
-      GoRoute(
-        path: '/cavalo/:registro',
-        parentNavigatorKey: chaveRaiz,
-        redirect: (context, state) {
-          final registro = state.pathParameters['registro'] ?? '';
-          final rep = RepositorioEscopo.de(context);
-          rep.focarRegistro(registro);
-          return Rotas.perfil;
-        },
-      ),
     ],
   );
+}
+
+/// Registro pedido pela URL: `/cavalo/<registro>` ou `/genealogia?cavalo=<registro>`.
+String? _registroDaUrl(GoRouterState state) =>
+    state.pathParameters['registro'] ?? state.uri.queryParameters[Rotas.parametroCavalo];
+
+/// Com um animal em foco, toda aba leva o registro na URL. Assim, recarregar em
+/// qualquer aba continua nele em vez de voltar ao destaque.
+String? _manterAnimalNaUrl(BuildContext context, GoRouterState state) {
+  final registro = context
+      .getInheritedWidgetOfExactType<RepositorioEscopo>()
+      ?.notifier
+      ?.registroEmFoco;
+  if (registro == null) return null;
+  final caminho = state.uri.path;
+  if (caminho == Rotas.perfil) return Rotas.cavaloPorRegistro(registro);
+  final aba = caminho == Rotas.genealogia || caminho == Rotas.historico || caminho == Rotas.midias;
+  if (!aba || state.uri.queryParameters.containsKey(Rotas.parametroCavalo)) return null;
+  return state.uri
+      .replace(queryParameters: {...state.uri.queryParameters, Rotas.parametroCavalo: registro})
+      .toString();
+}
+
+/// Aplica ao repositório o animal pedido pela URL antes de mostrar as telas, para
+/// o destaque não aparecer no lugar dele. Vale também ao recarregar a página e
+/// quando o acervo é recarregado, porque o roteador é montado de novo.
+class _FocoDaUrl extends StatefulWidget {
+  const _FocoDaUrl({required this.registro, required this.child});
+
+  final String? registro;
+  final Widget child;
+
+  @override
+  State<_FocoDaUrl> createState() => _FocoDaUrlState();
+}
+
+class _FocoDaUrlState extends State<_FocoDaUrl> {
+  String? _pedido;
+
+  @override
+  Widget build(BuildContext context) {
+    final registro = widget.registro?.trim();
+    if (registro == null || registro.isEmpty) return widget.child;
+
+    final repositorio = RepositorioEscopo.de(context);
+    final emFoco = repositorio.registroEmFoco?.toLowerCase() == registro.toLowerCase();
+    if (emFoco || (repositorio.erroFoco != null && _pedido == registro)) return widget.child;
+
+    if (_pedido != registro || repositorio.erroFoco == null) {
+      _pedido = registro;
+      // Notifica os ouvintes: não pode rodar durante o build.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) repositorio.focarRegistro(registro);
+      });
+    }
+    return const ColoredBox(color: Cores.fundo, child: SizedBox.expand());
+  }
 }
 
 /// Mostra [child] só para quem entrou; os demais veem a tela de acesso.
@@ -191,10 +247,15 @@ const _itens = <_ItemNavegacao>[
 ];
 
 class _MolduraPrincipal extends StatelessWidget {
-  const _MolduraPrincipal({required this.navigationShell, required this.itens});
+  const _MolduraPrincipal({
+    required this.navigationShell,
+    required this.itens,
+    required this.registroDaUrl,
+  });
 
   final StatefulNavigationShell navigationShell;
   final List<_ItemNavegacao> itens;
+  final String? registroDaUrl;
 
   void _selecionar(int indice) {
     navigationShell.goBranch(
@@ -213,7 +274,7 @@ class _MolduraPrincipal extends StatelessWidget {
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: larguraMaximaConteudo),
-        child: navigationShell,
+        child: _FocoDaUrl(registro: registroDaUrl, child: navigationShell),
       ),
     );
 
