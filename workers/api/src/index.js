@@ -201,6 +201,7 @@ const paraProva = (p) => ({
   tempoSegundos: Number(p.tempo_seg),
   inscritos: p.inscritos,
   premiacao: p.premiacao ?? null,
+  fonte: p.fonte ?? null,
 });
 
 const paraMidia = (m) => ({
@@ -263,7 +264,8 @@ async function lerAcervo(sql, harasId, { privado = false } = {}) {
         select json_agg(json_build_object(
           'id', p.id, 'data', p.data, 'nome', p.nome, 'local', p.local,
           'categoria', p.categoria, 'colocacao', p.colocacao,
-          'tempo_seg', p.tempo_seg, 'inscritos', p.inscritos, 'premiacao', p.premiacao
+          'tempo_seg', p.tempo_seg, 'inscritos', p.inscritos, 'premiacao', p.premiacao,
+          'fonte', p.fonte
         ) order by p.data desc) from provas p where p.cavalo_id = c.id
       ), '[]'::json) as provas,
       coalesce((
@@ -361,15 +363,15 @@ async function gravarCavalo(sql, harasId, c) {
 async function gravarProva(sql, cavaloId, p) {
   await sql`
     insert into provas (id, cavalo_id, data, nome, local, categoria, colocacao,
-                        tempo_seg, inscritos, premiacao)
+                        tempo_seg, inscritos, premiacao, fonte)
     values (${p.id}, ${cavaloId}, ${p.data}, ${p.nome}, ${p.local ?? ''},
             ${p.categoria ?? ''}, ${p.colocacao ?? 0}, ${p.tempoSegundos ?? 0},
-            ${p.inscritos ?? 0}, ${p.premiacao ?? null})
+            ${p.inscritos ?? 0}, ${p.premiacao ?? null}, ${p.fonte ?? null})
     on conflict (id) do update set
       data = excluded.data, nome = excluded.nome, local = excluded.local,
       categoria = excluded.categoria, colocacao = excluded.colocacao,
       tempo_seg = excluded.tempo_seg, inscritos = excluded.inscritos,
-      premiacao = excluded.premiacao
+      premiacao = excluded.premiacao, fonte = coalesce(excluded.fonte, provas.fonte)
   `;
 }
 
@@ -505,9 +507,9 @@ async function gravarAcervoEmLote(sql, harasId, acervo) {
   if (provas.length) {
     await sql`
       insert into provas (id, cavalo_id, data, nome, local, categoria, colocacao,
-                          tempo_seg, inscritos, premiacao)
+                          tempo_seg, inscritos, premiacao, fonte)
       select d.id, d.cavalo_id, d.data::date, d.nome, d.local, d.categoria,
-             d.colocacao::int, d.tempo_seg::numeric, d.inscritos::int, d.premiacao
+             d.colocacao::int, d.tempo_seg::numeric, d.inscritos::int, d.premiacao, d.fonte
       from unnest(
         ${provas.map((p) => p.id)}::text[],
         ${provas.map((p) => p.cavaloId)}::text[],
@@ -518,11 +520,13 @@ async function gravarAcervoEmLote(sql, harasId, acervo) {
         ${provas.map((p) => p.colocacao ?? 0)}::int[],
         ${provas.map((p) => p.tempoSegundos ?? 0)}::numeric[],
         ${provas.map((p) => p.inscritos ?? 0)}::int[],
-        ${provas.map((p) => p.premiacao ?? null)}::text[]
-      ) as d(id, cavalo_id, data, nome, local, categoria, colocacao, tempo_seg, inscritos, premiacao)
+        ${provas.map((p) => p.premiacao ?? null)}::text[],
+        ${provas.map((p) => p.fonte ?? null)}::text[]
+      ) as d(id, cavalo_id, data, nome, local, categoria, colocacao, tempo_seg, inscritos, premiacao, fonte)
       on conflict (id) do update set
         colocacao = excluded.colocacao, tempo_seg = excluded.tempo_seg,
-        inscritos = excluded.inscritos, premiacao = excluded.premiacao
+        inscritos = excluded.inscritos, premiacao = excluded.premiacao,
+        fonte = coalesce(excluded.fonte, provas.fonte)
     `;
   }
 
@@ -1191,10 +1195,12 @@ function normalizarProva(bruto, idForcado) {
     nome: texto(p.nome, 'prova.nome', { max: 120, obrigatorio: true }),
     local: texto(p.local, 'prova.local', { max: 120 }),
     categoria: texto(p.categoria, 'prova.categoria', { max: 60 }),
-    colocacao: inteiro(p.colocacao, 'prova.colocacao', { min: 1, max: 999, padrao: 1 }),
+    // Zero: a fonte não informou a colocação.
+    colocacao: inteiro(p.colocacao, 'prova.colocacao', { min: 0, max: 999, padrao: 1 }),
     tempoSegundos: decimal(p.tempoSegundos, 'prova.tempoSegundos', { min: 0, max: 100000 }),
     inscritos: inteiro(p.inscritos, 'prova.inscritos', { min: 0, max: 100000 }),
     premiacao: texto(p.premiacao, 'prova.premiacao', { max: 80 }) || null,
+    fonte: texto(p.fonte, 'prova.fonte', { max: 30 }) || null,
   };
 }
 

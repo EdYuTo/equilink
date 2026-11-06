@@ -616,7 +616,7 @@ class AbaProvas extends StatelessWidget {
                         borderRadius: BorderRadius.circular(AdminRaios.pequeno),
                       ),
                       child: Text(
-                        '${prova.colocacao}º',
+                        prova.temColocacao ? '${prova.colocacao}º' : '—',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,

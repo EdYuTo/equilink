@@ -8,6 +8,7 @@ import 'package:equilink_core/equilink_core.dart';
 import 'package:equilink/telas/acesso.dart';
 import 'package:equilink/telas/baias.dart';
 import 'package:equilink/telas/genealogia.dart';
+import 'package:equilink/telas/historico.dart';
 import 'package:equilink/telas/perfil.dart';
 import 'package:equilink/telas/placa.dart';
 import 'package:equilink/widgets/marca.dart';
@@ -418,6 +419,22 @@ void main() {
       expect(reais(3837038.3), 'R\$ 3.837.038,30');
       expect(reais(18222), 'R\$ 18.222,00');
       expect(reais(0), 'R\$ 0,00');
+    });
+
+    test('o histórico cita cada fonte uma vez e ignora as provas sem fonte', () {
+      Prova prova(String? fonte) => Prova(
+        id: 'p',
+        data: DateTime(2026),
+        nome: 'A',
+        local: '',
+        categoria: 'B',
+        colocacao: 0,
+        tempoSegundos: 1,
+        inscritos: 0,
+        fonte: fonte,
+      );
+      expect(fontesDasProvas([prova('HorseSport'), prova('HorseSport'), prova(null), prova('')]), ['HorseSport']);
+      expect(fontesDasProvas([prova(null)]), isEmpty);
     });
 
     test('a árvore tem 14 posições e nomeia cada ramo', () {

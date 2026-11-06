@@ -137,7 +137,7 @@ class _TelaProvasState extends State<TelaProvas> {
                             ),
                             child: Center(
                               child: Text(
-                                '${linha.prova.colocacao}º',
+                                linha.prova.temColocacao ? '${linha.prova.colocacao}º' : '—',
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,

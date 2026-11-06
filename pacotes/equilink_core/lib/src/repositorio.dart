@@ -331,6 +331,7 @@ class Repositorio extends ChangeNotifier {
   Map<String, int> get distribuicaoColocacoes {
     final mapa = <String, int>{};
     for (final p in cavalo?.provas ?? const <Prova>[]) {
+      if (!p.temColocacao) continue;
       final chave = p.colocacao <= 5 ? '${p.colocacao}º' : '6º+';
       mapa[chave] = (mapa[chave] ?? 0) + 1;
     }
