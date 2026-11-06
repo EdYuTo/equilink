@@ -11,6 +11,7 @@ import 'package:equilink/telas/genealogia.dart';
 import 'package:equilink/telas/perfil.dart';
 import 'package:equilink/telas/placa.dart';
 import 'package:equilink/widgets/marca.dart';
+import 'package:equilink/widgets/visualizador_midia.dart';
 import 'package:equilink/core/sessao_escopo.dart';
 import 'package:equilink/escopo.dart';
 
@@ -321,10 +322,18 @@ void main() {
 
     testWidgets('o visualizador de mídia não usa o texto sem estilo do Flutter', (tester) async {
       await abrir(tester);
-      await tester.tap(find.text('Capa'));
+      await tester.tap(destino('Fotos'));
       await tester.pumpAndSettle();
-      final fechar = tester.element(find.byTooltip('Fechar'));
-      expect(DefaultTextStyle.of(fechar).style.decoration, isNot(TextDecoration.underline));
+      await tester.tap(find.text('Capa').first);
+      await tester.pumpAndSettle();
+      final textos = find.descendant(
+        of: find.byType(VisualizadorMidia),
+        matching: find.byType(Text),
+      );
+      expect(textos, findsWidgets);
+      for (final elemento in textos.evaluate()) {
+        expect(DefaultTextStyle.of(elemento).style.decoration, isNot(TextDecoration.underline));
+      }
     });
 
     testWidgets('a aba Fotos não mostra QR Code ao visitante', (tester) async {
