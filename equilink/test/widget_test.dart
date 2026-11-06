@@ -338,6 +338,24 @@ void main() {
       }
     });
 
+    testWidgets('no visualizador, o vídeo usa toda a altura disponível', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: VisualizadorMidia(
+            midia: const Midia(
+              id: 'v',
+              tipo: TipoMidia.video,
+              arquivo: 'assets/video/inexistente.mp4',
+              legenda: 'Treino',
+            ),
+            aoFechar: () {},
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(tester.widget<PlayerVideo>(find.byType(PlayerVideo)).alturaMaxima, double.infinity);
+    });
+
     testWidgets('a aba Fotos não mostra QR Code ao visitante', (tester) async {
       await abrir(tester);
       await tester.tap(destino('Fotos'));
