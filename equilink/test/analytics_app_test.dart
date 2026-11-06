@@ -68,6 +68,8 @@ void main() {
   testWidgets('registra mudança de aba com o nome da aba', (tester) async {
     final coletor = await abrir(tester);
 
+    await tester.ensureVisible(find.text('Vídeos'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Vídeos'));
     await tester.pumpAndSettle();
 

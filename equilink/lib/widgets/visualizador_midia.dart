@@ -98,7 +98,7 @@ class VisualizadorMidia extends StatelessWidget {
                         maxScale: 5,
                         child: ImagemMidia(midia.arquivo, ajuste: BoxFit.contain),
                       )
-                    : PlayerVideo(midia: midia),
+                    : PlayerVideo(midia: midia, alturaMaxima: double.infinity),
               ),
             ),
             if (midia.local != null)
@@ -183,7 +183,7 @@ class _PlayerVideoState extends State<PlayerVideo> {
   Widget build(BuildContext context) {
     final controlador = _controlador;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: Espacos.x4),
+      padding: const EdgeInsets.symmetric(horizontal: Espacos.x2),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(Raios.medio),
         child: ConstrainedBox(

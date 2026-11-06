@@ -379,6 +379,10 @@ class _BlocoDetalhes extends StatelessWidget {
   }
 }
 
+/// Proporção 4:3, para o animal caber inteiro em foto na horizontal.
+double _alturaFoto(BuildContext context) =>
+    (MediaQuery.sizeOf(context).width * 0.75).clamp(170.0, 360.0);
+
 class _Carrossel extends StatelessWidget {
   const _Carrossel({
     required this.capa,
@@ -421,14 +425,14 @@ class _Carrossel extends StatelessWidget {
         );
       }
       return SizedBox(
-        height: 170,
+        height: _alturaFoto(context),
         width: double.infinity,
         child: ImagemMidia(capa, ajuste: BoxFit.cover),
       );
     }
 
     return SizedBox(
-      height: 170,
+      height: _alturaFoto(context),
       child: Stack(
         children: [
           PageView.builder(
