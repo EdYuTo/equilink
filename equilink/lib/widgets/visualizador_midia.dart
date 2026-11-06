@@ -52,7 +52,9 @@ class VisualizadorMidia extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
+    // Fica fora do Scaffold das telas: sem Material, os textos saem com o estilo
+    // de erro do Flutter (sublinhado amarelo).
+    return Material(
       color: Colors.black,
       child: SafeArea(
         child: Column(
