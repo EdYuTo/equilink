@@ -146,6 +146,12 @@ class Ancestral {
     this.pelagem,
     this.pai,
     this.mae,
+    this.nascimento,
+    this.premiacaoProvas,
+    this.premiacaoReprodutor,
+    this.filhosPremiados,
+    this.fonte,
+    this.atualizadoEm,
   });
 
   final String nome;
@@ -153,6 +159,22 @@ class Ancestral {
   final String? pelagem;
   final Ancestral? pai;
   final Ancestral? mae;
+
+  /// Data de nascimento em AAAA-MM-DD, quando conhecida.
+  final String? nascimento;
+
+  /// Premiação do próprio animal em provas.
+  final double? premiacaoProvas;
+
+  /// Premiação somada dos filhos, como garanhão ou matriz.
+  final double? premiacaoReprodutor;
+  final int? filhosPremiados;
+
+  /// De onde vieram os dados da ficha, como "SGP".
+  final String? fonte;
+
+  /// Quando os dados da ficha foram consultados, em AAAA-MM-DD.
+  final String? atualizadoEm;
 
   /// Percorre a árvore em largura, da raiz para as folhas.
   Iterable<Ancestral> emLargura() sync* {
@@ -178,6 +200,12 @@ class Ancestral {
     pelagem: j['pelagem'] as String?,
     pai: j['pai'] == null ? null : Ancestral.fromJson(j['pai'] as Map<String, dynamic>),
     mae: j['mae'] == null ? null : Ancestral.fromJson(j['mae'] as Map<String, dynamic>),
+    nascimento: j['nascimento'] as String?,
+    premiacaoProvas: (j['premiacaoProvas'] as num?)?.toDouble(),
+    premiacaoReprodutor: (j['premiacaoReprodutor'] as num?)?.toDouble(),
+    filhosPremiados: (j['filhosPremiados'] as num?)?.toInt(),
+    fonte: j['fonte'] as String?,
+    atualizadoEm: j['atualizadoEm'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -186,6 +214,12 @@ class Ancestral {
     if (pelagem != null) 'pelagem': pelagem,
     if (pai != null) 'pai': pai!.toJson(),
     if (mae != null) 'mae': mae!.toJson(),
+    if (nascimento != null) 'nascimento': nascimento,
+    if (premiacaoProvas != null) 'premiacaoProvas': premiacaoProvas,
+    if (premiacaoReprodutor != null) 'premiacaoReprodutor': premiacaoReprodutor,
+    if (filhosPremiados != null) 'filhosPremiados': filhosPremiados,
+    if (fonte != null) 'fonte': fonte,
+    if (atualizadoEm != null) 'atualizadoEm': atualizadoEm,
   };
 
   Ancestral copiarCom({
@@ -200,6 +234,12 @@ class Ancestral {
     pelagem: pelagem ?? this.pelagem,
     pai: pai ?? this.pai,
     mae: mae ?? this.mae,
+    nascimento: nascimento,
+    premiacaoProvas: premiacaoProvas,
+    premiacaoReprodutor: premiacaoReprodutor,
+    filhosPremiados: filhosPremiados,
+    fonte: fonte,
+    atualizadoEm: atualizadoEm,
   );
 }
 

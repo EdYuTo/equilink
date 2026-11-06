@@ -88,10 +88,6 @@ class _TelaPerfilState extends State<TelaPerfil> {
     return Scaffold(
       appBar: AppBar(
         title: const LogoEquilink(),
-        // Na tela larga, o acesso já está na barra lateral.
-        leading: MediaQuery.sizeOf(context).width < larguraNavegacaoLateral
-            ? const BotaoAcesso()
-            : null,
         actions: [
           IconButton(
             tooltip: 'Compartilhar perfil',
@@ -161,8 +157,8 @@ class _TelaPerfilState extends State<TelaPerfil> {
                     if (cavalo.pelagem.trim().isNotEmpty)
                       Etiqueta(
                         cavalo.pelagem,
-                        cor: Cores.textoSecundario,
-                        fundo: Cores.trilho,
+                        cor: Cores.dourado,
+                        fundo: Cores.dourado.withValues(alpha: 0.14),
                         compacta: true,
                       ),
                     Etiqueta(
@@ -240,20 +236,29 @@ class _TelaPerfilState extends State<TelaPerfil> {
                     ],
                   ),
                 ),
-                const SizedBox(height: Espacos.x5),
-                BotaoDourado(
-                  rotulo: 'Compartilhar perfil',
-                  icone: Icons.ios_share,
-                  aoTocar: () =>
-                      CompartilhamentoPerfil.compartilhar(context, repositorio),
-                ),
                 if (SessaoEscopo.de(context).autenticado) ...[
-                  const SizedBox(height: Espacos.x3),
+                  const SizedBox(height: Espacos.x5),
                   BotaoDourado(
                     rotulo: 'Placa de identificação',
                     icone: Icons.badge_outlined,
                     escuro: true,
                     aoTocar: () => context.push(Rotas.placa),
+                  ),
+                ],
+                // Na tela larga, o acesso já está na barra lateral.
+                if (MediaQuery.sizeOf(context).width < larguraNavegacaoLateral) ...[
+                  const SizedBox(height: Espacos.x4),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () => context.push(Rotas.acesso),
+                      icon: const Icon(Icons.person_outline, size: 16),
+                      label: Text(
+                        SessaoEscopo.de(context).autenticado
+                            ? 'Minha conta'
+                            : 'Acesso do proprietário',
+                      ),
+                      style: TextButton.styleFrom(foregroundColor: Cores.textoSecundario),
+                    ),
                   ),
                 ],
               ],
@@ -416,14 +421,14 @@ class _Carrossel extends StatelessWidget {
         );
       }
       return SizedBox(
-        height: 214,
+        height: 170,
         width: double.infinity,
         child: ImagemMidia(capa, ajuste: BoxFit.cover),
       );
     }
 
     return SizedBox(
-      height: 214,
+      height: 170,
       child: Stack(
         children: [
           PageView.builder(
@@ -433,25 +438,6 @@ class _Carrossel extends StatelessWidget {
             itemBuilder: (context, i) => GestureDetector(
               onTap: () => aoAbrirFoto(i),
               child: ImagemMidia(fotos[i].arquivo, ajuste: BoxFit.cover),
-            ),
-          ),
-          Positioned(
-            top: Espacos.x3,
-            right: Espacos.x3,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(Raios.total),
-              ),
-              child: Text(
-                '${pagina + 1}/${fotos.length}',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
             ),
           ),
           Positioned(

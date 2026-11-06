@@ -33,6 +33,9 @@ class _TelaGenealogiaState extends State<TelaGenealogia> {
   final _transformacao = TransformationController();
   double _zoom = _zoomMinimo;
 
+  /// Ancestral com a ficha aberta, destacado na árvore.
+  Ancestral? _selecionado;
+
   @override
   void dispose() {
     _transformacao.dispose();
@@ -59,7 +62,17 @@ class _TelaGenealogiaState extends State<TelaGenealogia> {
         : 'Registro ${cavalo.registro} · ${cavalo.sexo.rotulo} · ${cavalo.pelagem}';
 
     return Scaffold(
-      appBar: AppBar(title: const LogoEquilink()),
+      appBar: AppBar(
+        title: const LogoEquilink(),
+        // Na ficha de um ancestral o botão padrão volta à árvore anterior.
+        leading: widget.raiz == null
+            ? IconButton(
+                tooltip: 'Voltar ao perfil',
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => context.go(Rotas.perfil),
+              )
+            : null,
+      ),
       body: ListView(
         // Com zoom, o arraste move a árvore; sem zoom, rola a página.
         physics: _zoom > _zoomMinimo ? const NeverScrollableScrollPhysics() : null,
@@ -97,13 +110,20 @@ class _TelaGenealogiaState extends State<TelaGenealogia> {
                         style: const TextStyle(fontSize: 12, color: Cores.textoSecundario),
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        '${plural(conhecidos.length, 'ancestral', 'ancestrais')} · '
-                        '${plural(geracoes, 'geração', 'gerações')}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Cores.dourado,
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Cores.dourado.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(Raios.total),
+                        ),
+                        child: Text(
+                          '${plural(conhecidos.length, 'ancestral', 'ancestrais')} · '
+                          '${plural(geracoes, 'geração', 'gerações')}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Cores.dourado,
+                          ),
                         ),
                       ),
                     ],
@@ -114,27 +134,9 @@ class _TelaGenealogiaState extends State<TelaGenealogia> {
           ),
           const SizedBox(height: Espacos.x3),
           Painel(
-            padding: const EdgeInsets.fromLTRB(Espacos.x3, Espacos.x3, Espacos.x3, Espacos.x3),
+            padding: const EdgeInsets.fromLTRB(6, Espacos.x3, 6, Espacos.x2),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.touch_app_outlined, size: 15, color: Cores.textoSecundario),
-                    const SizedBox(width: Espacos.x1),
-                    const Expanded(
-                      child: Text(
-                        'Toque num ancestral para ver os detalhes',
-                        style: TextStyle(fontSize: 11, color: Cores.textoSecundario),
-                      ),
-                    ),
-                    _ControleZoom(
-                      zoom: _zoom,
-                      aoDiminuir: _zoom > _zoomMinimo ? () => _definirZoom(_zoom - _passoZoom) : null,
-                      aoAumentar: _zoom < _zoomMaximo ? () => _definirZoom(_zoom + _passoZoom) : null,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: Espacos.x3),
                 ClipRect(
                   child: InteractiveViewer(
                     transformationController: _transformacao,
@@ -149,9 +151,29 @@ class _TelaGenealogiaState extends State<TelaGenealogia> {
                     },
                     child: ArvoreGenealogica(
                       slots: slots,
+                      selecionado: _selecionado,
                       aoTocar: (slot) => _abrirFicha(context, slot),
                     ),
                   ),
+                ),
+                const SizedBox(height: Espacos.x2),
+                Row(
+                  children: [
+                    const SizedBox(width: Espacos.x1),
+                    const Icon(Icons.touch_app_outlined, size: 15, color: Cores.textoSecundario),
+                    const SizedBox(width: Espacos.x1),
+                    const Expanded(
+                      child: Text(
+                        'Toque num ancestral para ver os detalhes',
+                        style: TextStyle(fontSize: 11, color: Cores.textoSecundario),
+                      ),
+                    ),
+                    _ControleZoom(
+                      zoom: _zoom,
+                      aoDiminuir: _zoom > _zoomMinimo ? () => _definirZoom(_zoom - _passoZoom) : null,
+                      aoAumentar: _zoom < _zoomMaximo ? () => _definirZoom(_zoom + _passoZoom) : null,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -174,6 +196,7 @@ class _TelaGenealogiaState extends State<TelaGenealogia> {
     final cadastrado = registro.isNotEmpty &&
         repositorio.cavalos.any((c) => c.registro.trim().toLowerCase() == registro);
 
+    setState(() => _selecionado = ancestral);
     final acao = await showModalBottomSheet<_AcaoFicha>(
       context: context,
       useRootNavigator: true,
@@ -183,6 +206,7 @@ class _TelaGenealogiaState extends State<TelaGenealogia> {
       builder: (_) => _FichaAncestral(slot: slot, cadastrado: cadastrado),
     );
     if (!context.mounted) return;
+    setState(() => _selecionado = null);
     switch (acao) {
       case _AcaoFicha.genealogia:
         Navigator.of(context).push(
@@ -262,18 +286,23 @@ List<SlotGenealogia> montarSlots(Ancestral raiz) {
 
 /// Árvore lateral: pais à esquerda, avós no meio e bisavós à direita.
 class ArvoreGenealogica extends StatelessWidget {
-  const ArvoreGenealogica({super.key, required this.slots, required this.aoTocar});
+  const ArvoreGenealogica({
+    super.key,
+    required this.slots,
+    required this.aoTocar,
+    this.selecionado,
+  });
 
   /// Altura reservada a cada bisavô; as outras colunas se centralizam nela.
-  static const _alturaLinha = 68.0;
+  static const _alturaLinha = 49.0;
   static const _alturaTitulos = 24.0;
-  static const _vaoColunas = 12.0;
+  static const _vaoColunas = 10.0;
 
   final List<SlotGenealogia> slots;
   final ValueChanged<SlotGenealogia> aoTocar;
+  final Ancestral? selecionado;
 
-  /// Os pais têm mais espaço e uma linha a mais, com o papel de cada um.
-  static double _alturaCaixa(int geracao) => geracao == 1 ? 80 : 62;
+  static const _alturaCaixa = 46.0;
 
   /// Centro vertical de um slot, medido em linhas de bisavós.
   static double _centro(int geracao, int indice) {
@@ -324,10 +353,14 @@ class ArvoreGenealogica extends StatelessWidget {
               for (final slot in slots)
                 Positioned(
                   left: esquerda(slot.geracao),
-                  top: _centro(slot.geracao, slot.indice) - _alturaCaixa(slot.geracao) / 2,
+                  top: _centro(slot.geracao, slot.indice) - _alturaCaixa / 2,
                   width: coluna,
-                  height: _alturaCaixa(slot.geracao),
-                  child: _CaixaAncestral(slot: slot, aoTocar: () => aoTocar(slot)),
+                  height: _alturaCaixa,
+                  child: _CaixaAncestral(
+                    slot: slot,
+                    selecionado: slot.ancestral != null && identical(slot.ancestral, selecionado),
+                    aoTocar: () => aoTocar(slot),
+                  ),
                 ),
             ],
           ),
@@ -338,9 +371,10 @@ class ArvoreGenealogica extends StatelessWidget {
 }
 
 class _CaixaAncestral extends StatelessWidget {
-  const _CaixaAncestral({required this.slot, required this.aoTocar});
+  const _CaixaAncestral({required this.slot, required this.selecionado, required this.aoTocar});
 
   final SlotGenealogia slot;
+  final bool selecionado;
   final VoidCallback aoTocar;
 
   @override
@@ -365,51 +399,55 @@ class _CaixaAncestral extends StatelessWidget {
       );
     }
 
-    final detalhes = [
+    final detalhe = [
       if (_informado(ancestral.registro)) ancestral.registro.trim(),
       if (ancestral.pelagem?.trim().isNotEmpty ?? false) ancestral.pelagem!.trim(),
-    ];
+    ].join(' · ');
 
     return Material(
       color: slot.macho ? _corMacho : _corFemea,
-      borderRadius: raio,
+      shape: RoundedRectangleBorder(
+        borderRadius: raio,
+        side: selecionado
+            ? const BorderSide(color: Cores.dourado, width: 2)
+            : BorderSide.none,
+      ),
       child: InkWell(
         borderRadius: raio,
         onTap: aoTocar,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (slot.geracao == 1)
-                Text(
-                  slot.papel,
-                  style: const TextStyle(
-                    fontSize: 9.5,
-                    height: 1.15,
-                    fontWeight: FontWeight.w600,
-                    color: Cores.dourado,
-                  ),
+              Text.rich(
+                TextSpan(
+                  children: [
+                    if (slot.geracao == 1)
+                      TextSpan(
+                        text: '${slot.papel} · ',
+                        style: const TextStyle(color: Cores.dourado),
+                      ),
+                    TextSpan(text: ancestral.nome.toUpperCase()),
+                  ],
                 ),
-              Text(
-                ancestral.nome.toUpperCase(),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 10,
-                  height: 1.15,
+                  fontSize: 9.5,
+                  height: 1.1,
                   fontWeight: FontWeight.w700,
                   color: Cores.texto,
                 ),
               ),
-              for (final detalhe in detalhes)
+              if (detalhe.isNotEmpty)
                 Text(
                   detalhe,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 9,
+                    fontSize: 8.5,
                     height: 1.25,
                     color: Cores.textoSecundario,
                   ),
@@ -499,7 +537,23 @@ class _ControleZoom extends StatelessWidget {
 
 enum _AcaoFicha { genealogia, perfil }
 
-/// Folha com os dados que temos do ancestral tocado.
+/// Formata em reais, no padrão brasileiro: 86410.5 vira R$ 86.410,50.
+String reais(double valor) {
+  final partes = valor.toStringAsFixed(2).split('.');
+  final inteiro = partes[0].replaceAllMapped(
+    RegExp(r'\B(?=(\d{3})+(?!\d))'),
+    (_) => '.',
+  );
+  return 'R\$ $inteiro,${partes[1]}';
+}
+
+String _dataOuPadrao(String? iso) {
+  final data = iso == null ? null : DateTime.tryParse(iso);
+  return data == null ? 'não informado' : dataCurta(data);
+}
+
+/// Folha com os dados que temos do ancestral tocado. Só mostra números reais:
+/// o que a fonte não informa aparece como "não informado".
 class _FichaAncestral extends StatelessWidget {
   const _FichaAncestral({required this.slot, required this.cadastrado});
 
@@ -510,10 +564,29 @@ class _FichaAncestral extends StatelessWidget {
   Widget build(BuildContext context) {
     final ancestral = slot.ancestral!;
     final temPais = montarSlots(ancestral).any((s) => s.ancestral != null);
+    final identificacao = [
+      'Registro ${_textoOuPadrao(ancestral.registro)}',
+      slot.macho ? 'Macho' : 'Fêmea',
+      if (_informado(ancestral.pelagem)) ancestral.pelagem!.trim(),
+    ].join(' · ');
+    final fonte = ancestral.fonte?.trim() ?? '';
+    final atualizado = ancestral.atualizadoEm == null ? null : DateTime.tryParse(ancestral.atualizadoEm!);
+
+    Widget par(String r1, String v1, String r2, String v2) => Padding(
+      padding: const EdgeInsets.only(bottom: Espacos.x3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: CampoInfo(rotulo: r1, valor: v1)),
+          const SizedBox(width: Espacos.x3),
+          Expanded(child: CampoInfo(rotulo: r2, valor: v2)),
+        ],
+      ),
+    );
 
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(Espacos.x5, 0, Espacos.x5, Espacos.x5),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(Espacos.x5, 0, Espacos.x5, Espacos.x4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -528,49 +601,109 @@ class _FichaAncestral extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 2),
-            Text(
-              ancestral.nome.toUpperCase(),
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Cores.texto),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    ancestral.nome.toUpperCase(),
+                    style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: Cores.texto),
+                  ),
+                ),
+                if (fonte.isNotEmpty) ...[
+                  const SizedBox(width: Espacos.x2),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Cores.azulFundo,
+                      borderRadius: BorderRadius.circular(Raios.total),
+                    ),
+                    child: Text(
+                      'Fonte: $fonte',
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Cores.azul),
+                    ),
+                  ),
+                ],
+              ],
             ),
+            const SizedBox(height: 2),
+            Text(identificacao, style: const TextStyle(fontSize: 12.5, color: Cores.textoSecundario)),
             const SizedBox(height: Espacos.x4),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: CampoInfo(rotulo: 'Registro', valor: _textoOuPadrao(ancestral.registro))),
-                Expanded(child: CampoInfo(rotulo: 'Sexo', valor: slot.macho ? 'Macho' : 'Fêmea')),
-              ],
+            par('Pai', _textoOuPadrao(ancestral.pai?.nome), 'Mãe', _textoOuPadrao(ancestral.mae?.nome)),
+            par('Nascimento', _dataOuPadrao(ancestral.nascimento), 'Criador', 'não informado'),
+            par(
+              'Premiação em provas',
+              ancestral.premiacaoProvas == null ? 'não informado' : reais(ancestral.premiacaoProvas!),
+              'Filhos com premiação',
+              ancestral.filhosPremiados == null ? 'não informado' : '${ancestral.filhosPremiados}',
             ),
-            const SizedBox(height: Espacos.x3),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: CampoInfo(rotulo: 'Pelagem', valor: _textoOuPadrao(ancestral.pelagem))),
-                const Expanded(child: SizedBox.shrink()),
-              ],
-            ),
-            const SizedBox(height: Espacos.x3),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: CampoInfo(rotulo: 'Pai', valor: _textoOuPadrao(ancestral.pai?.nome))),
-                Expanded(child: CampoInfo(rotulo: 'Mãe', valor: _textoOuPadrao(ancestral.mae?.nome))),
-              ],
-            ),
-            if (temPais) ...[
-              const SizedBox(height: Espacos.x4),
-              BotaoDourado(
-                rotulo: 'Ver a genealogia de ${ancestral.nome}',
-                icone: Icons.account_tree_outlined,
-                escuro: true,
-                aoTocar: () => Navigator.of(context).pop(_AcaoFicha.genealogia),
+            if (ancestral.premiacaoReprodutor != null)
+              par(
+                slot.macho ? 'Premiação como garanhão' : 'Premiação como matriz',
+                reais(ancestral.premiacaoReprodutor!),
+                '',
+                '',
               ),
-            ],
+            if (temPais)
+              Material(
+                color: Cores.superficieSuave,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(Raios.medio),
+                  side: const BorderSide(color: Cores.borda),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(Raios.medio),
+                  onTap: () => Navigator.of(context).pop(_AcaoFicha.genealogia),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Espacos.x4, vertical: Espacos.x3),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                slot.macho ? 'VER A GENEALOGIA DELE' : 'VER A GENEALOGIA DELA',
+                                style: const TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.5,
+                                  color: Cores.textoSecundario,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Pais, avós e bisavós de ${ancestral.nome}',
+                                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Cores.texto),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right, color: Cores.textoSecundario),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             if (cadastrado) ...[
               const SizedBox(height: Espacos.x3),
               BotaoDourado(
                 rotulo: 'Ver o perfil completo',
                 icone: Icons.badge_outlined,
                 aoTocar: () => Navigator.of(context).pop(_AcaoFicha.perfil),
+              ),
+            ],
+            if (atualizado != null) ...[
+              const SizedBox(height: Espacos.x3),
+              Row(
+                children: [
+                  const Icon(Icons.update, size: 15, color: Cores.textoSecundario),
+                  const SizedBox(width: Espacos.x1),
+                  Text(
+                    'Atualizado em ${dataCurta(atualizado)}',
+                    style: const TextStyle(fontSize: 12, color: Cores.textoSecundario),
+                  ),
+                ],
               ),
             ],
           ],

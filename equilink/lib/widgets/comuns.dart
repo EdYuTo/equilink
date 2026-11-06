@@ -107,21 +107,12 @@ class _Aba extends StatelessWidget {
                 ),
                 if (contagem != null) ...[
                   const SizedBox(width: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: ativa
-                          ? Colors.white.withValues(alpha: 0.18)
-                          : Cores.superficie,
-                      borderRadius: BorderRadius.circular(Raios.total),
-                    ),
-                    child: Text(
-                      '$contagem',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: ativa ? Colors.white : Cores.textoSecundario,
-                      ),
+                  Text(
+                    '$contagem',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: ativa ? FontWeight.w600 : FontWeight.w500,
+                      color: ativa ? Colors.white : Cores.textoSecundario,
                     ),
                   ),
                 ],
