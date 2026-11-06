@@ -319,6 +319,14 @@ void main() {
       expect(find.byTooltip('Acesso do proprietário'), findsOneWidget);
     });
 
+    testWidgets('o visualizador de mídia não usa o texto sem estilo do Flutter', (tester) async {
+      await abrir(tester);
+      await tester.tap(find.text('Capa'));
+      await tester.pumpAndSettle();
+      final fechar = tester.element(find.byTooltip('Fechar'));
+      expect(DefaultTextStyle.of(fechar).style.decoration, isNot(TextDecoration.underline));
+    });
+
     testWidgets('a aba Fotos não mostra QR Code ao visitante', (tester) async {
       await abrir(tester);
       await tester.tap(destino('Fotos'));
