@@ -59,3 +59,37 @@ test('aceita até o limite de gerações e recusa além dele', () => {
   assert.doesNotThrow(() => normalizarAncestral(pilha(MAX_GERACOES), 'pai'));
   assert.throws(() => normalizarAncestral(pilha(MAX_GERACOES + 1), 'pai'), ErroValidacao);
 });
+
+test('a ficha do ancestral volta igual, em qualquer geração', () => {
+  const ficha = {
+    nome: 'MCM HAMMERTIME',
+    registro: 'P166842',
+    pelagem: 'Tordilho',
+    nascimento: '2012-03-04',
+    premiacaoProvas: 86410.5,
+    premiacaoReprodutor: 1200,
+    filhosPremiados: 41,
+    fonte: 'SGP',
+    atualizadoEm: '2026-11-06',
+  };
+  assert.deepEqual(normalizarAncestral(ficha, 'mae'), ficha);
+  assert.deepEqual(normalizarAncestral({ nome: 'A', registro: 'B', pai: ficha }, 'pai').pai, ficha);
+});
+
+test('premiação zero é um dado e continua gravada', () => {
+  assert.equal(normalizarAncestral({ nome: 'A', premiacaoProvas: 0 }, 'pai').premiacaoProvas, 0);
+});
+
+test('dados inválidos na ficha são recusados', () => {
+  for (const ruim of [
+    { nascimento: '04/03/2012' },
+    { atualizadoEm: 'ontem' },
+    { premiacaoProvas: '100' },
+    { premiacaoProvas: -1 },
+    { premiacaoReprodutor: Infinity },
+    { filhosPremiados: 1.5 },
+    { filhosPremiados: -2 },
+  ]) {
+    assert.throws(() => normalizarAncestral({ nome: 'A', ...ruim }, 'pai'), ErroValidacao, JSON.stringify(ruim));
+  }
+});

@@ -317,7 +317,8 @@ void main() {
       expect(find.byTooltip('Placa de identificação'), findsNothing);
       expect(find.textContaining('QR Code'), findsNothing);
       expect(find.text('Editar'), findsNothing);
-      expect(find.byTooltip('Acesso do proprietário'), findsOneWidget);
+      expect(find.text('Acesso do proprietário'), findsOneWidget);
+      expect(find.text('Compartilhar perfil'), findsNothing);
     });
 
     testWidgets('o visualizador de mídia não usa o texto sem estilo do Flutter', (tester) async {
@@ -356,13 +357,13 @@ void main() {
       expect(find.text('Profundidade da árvore'), findsNothing);
 
       final cavalo = FonteMemoria.acervoDeDemonstracao().principal!;
-      await tester.tap(find.text(cavalo.pai.nome.toUpperCase()));
+      await tester.tap(find.textContaining(cavalo.pai.nome.toUpperCase(), findRichText: true).first);
       await tester.pumpAndSettle();
 
       expect(find.text('PAI'), findsWidgets);
-      expect(find.textContaining('Ver a genealogia de'), findsOneWidget);
+      expect(find.textContaining('Pais, avós e bisavós de'), findsOneWidget);
 
-      await tester.tap(find.textContaining('Ver a genealogia de'));
+      await tester.tap(find.textContaining('Pais, avós e bisavós de'));
       await tester.pumpAndSettle();
       expect(find.text(cavalo.pai.nome), findsOneWidget);
       expect(find.text('BISAVÓS'), findsWidgets);
@@ -380,6 +381,43 @@ void main() {
       await tester.tap(find.byTooltip('Diminuir zoom'));
       await tester.pumpAndSettle();
       expect(find.text('100%'), findsOneWidget);
+    });
+
+    testWidgets('a ficha mostra os dados reais e o que falta fica como não informado', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ArvoreGenealogica(
+              slots: montarSlots(
+                const Ancestral(
+                  nome: 'RAIZ',
+                  registro: 'R',
+                  pai: Ancestral(
+                    nome: 'GARANHAO',
+                    registro: 'P1',
+                    premiacaoProvas: 18222,
+                    premiacaoReprodutor: 3837038.3,
+                    filhosPremiados: 41,
+                    nascimento: '2015-07-02',
+                    fonte: 'SGP',
+                    atualizadoEm: '2026-11-06',
+                  ),
+                ),
+              ),
+              aoTocar: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Pai · GARANHAO', findRichText: true), findsOneWidget);
+      expect(find.text('Não informado'), findsNWidgets(13));
+      expect(reais(3837038.3), 'R\$ 3.837.038,30');
+      expect(reais(18222), 'R\$ 18.222,00');
+      expect(reais(0), 'R\$ 0,00');
     });
 
     test('a árvore tem 14 posições e nomeia cada ramo', () {
