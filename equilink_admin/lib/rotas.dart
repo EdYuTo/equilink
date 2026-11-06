@@ -1,3 +1,4 @@
+import 'core/navegar_stub.dart' if (dart.library.js_interop) 'core/navegar_web.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:equilink_core/equilink_core.dart';
@@ -65,11 +66,14 @@ GoRouter criarRoteadorAdmin() {
 }
 
 class _Item {
-  const _Item(this.rotulo, this.icone, this.rota);
+  const _Item(this.rotulo, this.icone, this.rota, {this.endereco});
 
   final String rotulo;
   final IconData icone;
   final String rota;
+
+  /// Página fora do aplicativo. Quando presente, o item sai do painel.
+  final String? endereco;
 }
 
 const _itens = <_Item>[
@@ -78,6 +82,12 @@ const _itens = <_Item>[
   _Item('Provas', Icons.emoji_events_outlined, RotasAdmin.provas),
   _Item('Analytics', Icons.insights_outlined, RotasAdmin.analytics),
   _Item('Fonte de dados', Icons.storage_outlined, RotasAdmin.fonte),
+  _Item(
+    'Etiquetas',
+    Icons.sell_outlined,
+    '/etiquetas',
+    endereco: 'https://painel.equilinkapp.com.br/etiquetas',
+  ),
 ];
 
 /// Moldura do painel: barra lateral fixa em telas largas, gaveta em telas
@@ -438,7 +448,10 @@ class _Menu extends StatelessWidget {
             item: item,
             ativo: rotaAtual == item.rota ||
                 (item.rota != RotasAdmin.painel && rotaAtual.startsWith(item.rota)),
-            aoTocar: () => aoNavegar(item.rota),
+            aoTocar: () {
+              final endereco = item.endereco;
+              endereco == null ? aoNavegar(item.rota) : abrirEndereco(endereco);
+            },
           ),
         const Spacer(),
         Padding(
