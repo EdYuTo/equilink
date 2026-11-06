@@ -648,7 +648,7 @@ class _ResumoHistorico extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          '${dataCurta(prova.data)} • ${prova.local}',
+                          [dataCurta(prova.data), if (prova.local.trim().isNotEmpty) prova.local].join(' • '),
                           style: const TextStyle(
                             fontSize: 12,
                             color: Cores.textoSecundario,

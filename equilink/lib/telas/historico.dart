@@ -87,6 +87,13 @@ class _TelaHistoricoState extends State<TelaHistorico> {
             1 => _ListaResultados(provas: filtradas),
             _ => _Estatisticas(cavalo: cavalo, repositorio: repositorio),
           },
+          if (fontesDasProvas(cavalo.provas).isNotEmpty) ...[
+            const SizedBox(height: Espacos.x2),
+            Text(
+              'Resultados: ${fontesDasProvas(cavalo.provas).join(', ')}',
+              style: const TextStyle(fontSize: 12, color: Cores.textoSecundario),
+            ),
+          ],
           const SizedBox(height: Espacos.x4),
           Painel(
             child: Column(
@@ -272,7 +279,7 @@ class _ListaProvas extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              '${prova.local} • ${dataMedia(prova.data)}',
+                              [if (prova.local.trim().isNotEmpty) prova.local, dataMedia(prova.data)].join(' • '),
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: Cores.textoSecundario,
@@ -297,7 +304,7 @@ class _ListaProvas extends StatelessWidget {
                       children: [
                         _Metrica(rotulo: 'Tempo', valor: tempoProvaCompacto(prova.tempoSegundos)),
                         const _Separador(),
-                        _Metrica(rotulo: 'Inscritos', valor: '${prova.inscritos}'),
+                        _Metrica(rotulo: 'Inscritos', valor: prova.inscritos > 0 ? '${prova.inscritos}' : '—'),
                         const _Separador(),
                         _Metrica(
                           rotulo: 'Premiação',
@@ -314,6 +321,12 @@ class _ListaProvas extends StatelessWidget {
     );
   }
 }
+
+/// Fontes externas dos resultados, para citar de onde vieram os dados.
+List<String> fontesDasProvas(List<Prova> provas) => {
+  for (final p in provas)
+    if (p.fonte?.trim().isNotEmpty ?? false) p.fonte!.trim(),
+}.toList();
 
 /// Aba "Resultados": tabela compacta com todas as provas.
 class _ListaResultados extends StatelessWidget {

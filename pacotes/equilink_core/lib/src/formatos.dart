@@ -105,7 +105,7 @@ String idade(DateTime nascimento, {DateTime? referencia}) {
 }
 
 /// `1º`, `2º`, `3º`... usado nas colocações das provas.
-String colocacao(int posicao) => '$posicaoº';
+String colocacao(int posicao) => posicao > 0 ? '$posicaoº' : '—';
 
 /// `12 provas`
 String plural(int quantidade, String singular, String pluralForma) =>

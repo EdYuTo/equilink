@@ -254,6 +254,7 @@ class Prova {
     required this.tempoSegundos,
     required this.inscritos,
     this.premiacao,
+    this.fonte,
   });
 
   final String id;
@@ -266,8 +267,13 @@ class Prova {
   final int inscritos;
   final String? premiacao;
 
+  /// De onde veio o resultado, como "HorseSport". Nulo quando foi cadastrado à mão.
+  final String? fonte;
+
+  /// Zero significa que a fonte não informou a colocação.
+  bool get temColocacao => colocacao > 0;
   bool get vitoria => colocacao == 1;
-  bool get podio => colocacao <= 3;
+  bool get podio => temColocacao && colocacao <= 3;
 
   factory Prova.fromJson(Map<String, dynamic> j) => Prova(
     id: j['id'] as String? ?? '',
@@ -279,6 +285,7 @@ class Prova {
     tempoSegundos: (j['tempoSegundos'] as num?)?.toDouble() ?? 0,
     inscritos: (j['inscritos'] as num?)?.toInt() ?? 0,
     premiacao: j['premiacao'] as String?,
+    fonte: j['fonte'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -291,6 +298,7 @@ class Prova {
     'tempoSegundos': tempoSegundos,
     'inscritos': inscritos,
     if (premiacao != null) 'premiacao': premiacao,
+    if (fonte != null) 'fonte': fonte,
   };
 
   Prova copiarCom({
@@ -303,6 +311,7 @@ class Prova {
     double? tempoSegundos,
     int? inscritos,
     String? premiacao,
+    String? fonte,
   }) => Prova(
     id: id ?? this.id,
     data: data ?? this.data,
@@ -313,6 +322,7 @@ class Prova {
     tempoSegundos: tempoSegundos ?? this.tempoSegundos,
     inscritos: inscritos ?? this.inscritos,
     premiacao: premiacao ?? this.premiacao,
+    fonte: fonte ?? this.fonte,
   );
 }
 
