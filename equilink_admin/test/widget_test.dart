@@ -90,6 +90,51 @@ void main() {
     await tester.pump();
     expect(ultimoEnderecoAberto, 'https://painel.equilinkapp.com.br/etiquetas');
   });
+
+  Future<void> abrirAssistente(WidgetTester tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    tester.binding.platformDispatcher.defaultRouteNameTestValue = '/cavalos/novo';
+    addTearDown(tester.binding.platformDispatcher.clearDefaultRouteNameTestValue);
+    await tester.pumpWidget(PainelApp(fonte: FonteMemoria()));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> preencher(WidgetTester tester, String nome, String registro) async {
+    await tester.enterText(find.widgetWithText(TextField, 'Nome *'), nome);
+    await tester.enterText(find.widgetWithText(TextField, 'Registro ABQM *'), registro);
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('no celular, nada flutuante cobre o botão Continuar do cadastro', (tester) async {
+    await abrirAssistente(tester);
+    expect(find.text('Sugestões'), findsNothing);
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Informe nome e registro'), findsOneWidget);
+  });
+
+  testWidgets('o cadastro recusa um nome que já existe, sem sobrescrever o animal', (tester) async {
+    await abrirAssistente(tester);
+    await preencher(tester, 'isabel toro leo', 'P999999');
+    expect(find.textContaining('Já existe um animal com esse nome'), findsOneWidget);
+    expect(find.text('Passo 1 de 5'), findsOneWidget);
+  });
+
+  testWidgets('o cadastro recusa um registro que já existe', (tester) async {
+    await abrirAssistente(tester);
+    await preencher(tester, 'NOME NOVO', 'p341234');
+    expect(find.textContaining('Já existe um animal com esse registro'), findsOneWidget);
+    expect(find.text('Passo 1 de 5'), findsOneWidget);
+  });
+
+  testWidgets('nome e registro novos seguem para o próximo passo', (tester) async {
+    await abrirAssistente(tester);
+    await preencher(tester, 'NOME NOVO', 'P999999');
+    expect(find.text('Passo 2 de 5'), findsOneWidget);
+  });
 }
 
 /// Verifica a importação de acervo — o caminho usado para migrar entre
@@ -183,7 +228,7 @@ void _importacao() {
     expect(find.text('Estrela do Vale'), findsOneWidget);
     expect(find.text('Pai Teste'), findsOneWidget);
 
-    await tester.tap(find.text('Concluir cadastro'));
+    await tester.tap(find.text('Concluir'));
     await tester.pumpAndSettle();
 
     final gravado = await fonte.carregar();
@@ -192,8 +237,8 @@ void _importacao() {
     expect(novo.pai.nome, 'PAI TESTE');
     expect(novo.mae.nome, 'MAE TESTE');
     expect(novo.proprietario.nome, 'Joana');
-    // A baia nasce junto, com a rotina padrão.
-    expect(gravado.baias.any((b) => b.cavaloId == novo.id), isTrue);
+    // Baias estão fora da v1: o cadastro só cria uma se isso for pedido.
+    expect(gravado.baias.any((b) => b.cavaloId == novo.id), isFalse);
   });
 
   testWidgets('nao avanca sem nome e registro', (tester) async {
