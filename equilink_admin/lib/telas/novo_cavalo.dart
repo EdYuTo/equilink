@@ -83,7 +83,7 @@ class _TelaNovoCavaloState extends State<TelaNovoCavalo> {
   String? _fotoTipo;
   String? _erroFoto;
   bool _enviandoFoto = false;
-  var _criarBaia = true;
+  var _criarBaia = false;
   var _statusBaia = StatusBaia.emDia;
 
   @override
@@ -149,7 +149,28 @@ class _TelaNovoCavaloState extends State<TelaNovoCavalo> {
       setState(() => _erro = 'Informe nome e registro para continuar.');
       return;
     }
+    if (_passo == 0) {
+      final repetido = _animalRepetido();
+      if (repetido != null) {
+        setState(() => _erro = repetido);
+        return;
+      }
+    }
     if (_passo < _passos.length - 1) setState(() => _passo += 1);
+  }
+
+  /// O id vem do nome: repetir o nome sobrescreveria o animal já cadastrado, e
+  /// repetir o registro seria recusado pelo banco com um erro genérico.
+  String? _animalRepetido() {
+    final id = _idDoNome(_nome.text);
+    final registro = _registro.text.trim().toUpperCase();
+    for (final c in AdminEscopo.de(context).cavalos) {
+      if (c.id == id) return 'Já existe um animal com esse nome: ${c.nome}. Use a lista de cavalos para editá-lo.';
+      if (c.registro.trim().toUpperCase() == registro) {
+        return 'Já existe um animal com esse registro: ${c.nome}. Use a lista de cavalos para editá-lo.';
+      }
+    }
+    return null;
   }
 
   void _voltar() {
@@ -726,11 +747,13 @@ class _BarraAcoes extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text(
-            'Passo ${passo + 1} de $total',
-            style: const TextStyle(fontSize: 11.5, color: AdminCores.textoSecundario),
+          Expanded(
+            child: Text(
+              'Passo ${passo + 1} de $total',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11.5, color: AdminCores.textoSecundario),
+            ),
           ),
-          const Spacer(),
           if (passo > 0)
             OutlinedButton.icon(
               onPressed: salvando ? null : aoVoltar,
@@ -741,7 +764,7 @@ class _BarraAcoes extends StatelessWidget {
           // Largura fixa: o texto muda entre "Continuar" e "Concluir cadastro",
           // e o botão dançava de posição entre os passos.
           SizedBox(
-            width: ultimo ? 180 : 128,
+            width: 128,
             child: FilledButton(
               onPressed: salvando ? null : (ultimo ? aoSalvar : aoAvancar),
               child: salvando
@@ -750,7 +773,7 @@ class _BarraAcoes extends StatelessWidget {
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : Text(ultimo ? 'Concluir cadastro' : 'Continuar'),
+                  : Text(ultimo ? 'Concluir' : 'Continuar'),
             ),
           ),
         ],

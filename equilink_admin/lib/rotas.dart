@@ -152,7 +152,9 @@ class _MolduraState extends State<_Moldura> {
           child: Stack(
             children: [
               Positioned.fill(child: child),
-              if (!_sugestoesAbertas)
+              // O cadastro tem os botões de avançar no canto inferior direito: o
+              // botão flutuante ficava em cima deles e impedia de continuar.
+              if (!_sugestoesAbertas && rotaAtual != RotasAdmin.novoCavalo)
                 Positioned(
                   right: 20,
                   bottom: 20,
