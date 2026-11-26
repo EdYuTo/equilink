@@ -829,10 +829,13 @@ async function rotear(request, env, estado) {
       // Só quem administra o haras lê: os eventos trazem navegação e ações de
       // usuários identificados. Sem este endpoint, o painel mostrava apenas a
       // sessão local e os eventos enviados pelo app ficavam invisíveis no banco.
+      //
+      // O `leitor` fica de fora (EQL-005): antes bastava estar logado.
       if (partes[0] === 'eventos' && request.method === 'GET') {
         if (!autenticado) {
           return erro('Autenticação necessária para ler a telemetria.', 401, { cabecalhos: base });
         }
+        if (!podeEscrever) return recusarEscrita();
         const limite = inteiro(url.searchParams.get('limite'), 'limite', {
           min: 1,
           max: 5000,
