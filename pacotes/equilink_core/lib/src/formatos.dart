@@ -73,8 +73,8 @@ String tempoProva(double segundos) {
   return '$resto,$fracao';
 }
 
-/// `16,742s` — versão compacta para tabelas.
-String tempoProvaCompacto(double segundos) => '${tempoProva(segundos)}s';
+/// `16,742s` — versão compacta para tabelas. Sem tempo válido (zero): `—`.
+String tempoProvaCompacto(double segundos) => segundos > 0 ? '${tempoProva(segundos)}s' : '—';
 
 /// `1,52 m`
 String metros(double valor) => '${valor.toStringAsFixed(2).replaceAll('.', ',')} m';
@@ -87,7 +87,7 @@ String duracaoVideo(int segundos) => '${segundos ~/ 60}:${dois(segundos % 60)}';
 
 /// Idade em anos e meses: `7 anos` / `8 meses` / `1 ano e 3 meses`.
 String idade(DateTime nascimento, {DateTime? referencia}) {
-  final hoje = referencia ?? DateTime(2026, 10, 14);
+  final hoje = referencia ?? DateTime.now();
   var anos = hoje.year - nascimento.year;
   var meses = hoje.month - nascimento.month;
   if (hoje.day < nascimento.day) meses -= 1;

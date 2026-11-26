@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -49,8 +50,20 @@ class FonteHttp implements FonteDeDados {
   /// de serviço em [cabecalhos].
   final bool usarCookies;
 
+  /// Prazo das chamadas JSON. O envio de mídia usa [prazoEnvio].
   final Duration tempoLimite;
   final http.Client _cliente;
+
+  /// Prazo do envio de um arquivo de [bytes]: 60 s, ou o tempo de subir o
+  /// arquivo a 256 KiB/s (cerca de 2 Mbit/s), o que for maior.
+  ///
+  /// Com os 20 s das chamadas JSON, um vídeo bem abaixo do limite de 50 MB da
+  /// API falhava numa conexão comum de celular.
+  static Duration prazoEnvio(int bytes) {
+    final proporcional = Duration(milliseconds: bytes * 1000 ~/ (256 * 1024));
+    const minimo = Duration(seconds: 60);
+    return proporcional > minimo ? proporcional : minimo;
+  }
 
   @override
   String get descricao => 'API REST ($base)';
@@ -67,14 +80,33 @@ class FonteHttp implements FonteDeDados {
   };
 
   /// Traduz o status HTTP em erro de domínio, para a interface reagir.
-  Never _recusar(int status, String acao) {
+  ///
+  /// Quando a API explica a recusa no campo `erro` do corpo (ex.: "A prova X
+  /// pertence a outro cavalo."), é esse o texto que chega ao operador. A
+  /// mensagem genérica, com método e status, fica para respostas sem
+  /// explicação legível.
+  Never _recusar(http.Response resposta, String acao) {
+    final status = resposta.statusCode;
+    final daApi = _mensagemDaApi(resposta);
     if (status == 401) {
-      throw ErroAutenticacao('Sessão expirada ou não iniciada.', status: status);
+      throw ErroAutenticacao(daApi ?? 'Sessão expirada ou não iniciada.', status: status);
     }
     if (status == 403) {
-      throw ErroPermissao('Seu perfil não permite $acao.', status: status);
+      throw ErroPermissao(daApi ?? 'Seu perfil não permite $acao.', status: status);
     }
-    throw ErroFonte('A API recusou $acao ($status).', status: status);
+    throw ErroFonte(daApi ?? 'A API recusou $acao ($status).', status: status);
+  }
+
+  /// O campo `erro` de uma resposta JSON da API, se houver um texto nele.
+  static String? _mensagemDaApi(http.Response resposta) {
+    try {
+      final corpo = jsonDecode(utf8.decode(resposta.bodyBytes));
+      final erro = corpo is Map ? corpo['erro'] : null;
+      if (erro is String && erro.trim().isNotEmpty) return erro.trim();
+    } on FormatException {
+      // Corpo vazio, HTML de proxy ou bytes inválidos: fica a mensagem genérica.
+    }
+    return null;
   }
 
   @override
@@ -82,7 +114,7 @@ class FonteHttp implements FonteDeDados {
     try {
       final resposta = await _cliente.get(_endpoint, headers: _cabecalhosPadrao).timeout(tempoLimite);
       if (resposta.statusCode != 200) {
-        _recusar(resposta.statusCode, 'carregar o acervo');
+        _recusar(resposta, 'carregar o acervo');
       }
       final corpo = jsonDecode(utf8.decode(resposta.bodyBytes)) as Map<String, dynamic>;
       return Acervo.fromJson(corpo);
@@ -101,7 +133,7 @@ class FonteHttp implements FonteDeDados {
           .timeout(tempoLimite);
       if (resposta.statusCode != 200 && resposta.statusCode != 201) {
         throw ErroFonte(
-          'A API recusou a gravação (${resposta.statusCode}).',
+          _mensagemDaApi(resposta) ?? 'A API recusou a gravação (${resposta.statusCode}).',
           status: resposta.statusCode,
         );
       }
@@ -128,7 +160,7 @@ class FonteHttp implements FonteDeDados {
           ? await _cliente.put(uri, headers: _cabecalhosPadrao, body: jsonEncode(corpo)).timeout(tempoLimite)
           : await _cliente.post(uri, headers: _cabecalhosPadrao, body: jsonEncode(corpo)).timeout(tempoLimite);
       if (resposta.statusCode >= 400) {
-        _recusar(resposta.statusCode, '$metodo $caminho');
+        _recusar(resposta, '$metodo $caminho');
       }
     } on ErroFonte {
       rethrow;
@@ -141,7 +173,7 @@ class FonteHttp implements FonteDeDados {
     try {
       final resposta = await _cliente.delete(_rota(caminho), headers: _cabecalhosPadrao).timeout(tempoLimite);
       if (resposta.statusCode >= 400 && resposta.statusCode != 404) {
-        _recusar(resposta.statusCode, 'remover $caminho');
+        _recusar(resposta, 'remover $caminho');
       }
     } on ErroFonte {
       rethrow;
@@ -172,6 +204,55 @@ class FonteHttp implements FonteDeDados {
   );
 
   @override
+  Future<void> removerProva(String cavaloId, String provaId) => _remover(
+    '/cavalos/${Uri.encodeComponent(cavaloId)}/provas/${Uri.encodeComponent(provaId)}',
+  );
+
+  @override
+  Future<void> removerMidia(String cavaloId, String midiaId) => _remover(
+    '/cavalos/${Uri.encodeComponent(cavaloId)}/midias/${Uri.encodeComponent(midiaId)}',
+  );
+
+  /// Tamanho máximo de um lote de provas aceito pela API.
+  static const loteProvas = 500;
+
+  @override
+  Future<void> salvarProvas(String cavaloId, List<Prova> provas) async {
+    final caminho = '/cavalos/${Uri.encodeComponent(cavaloId)}/provas';
+    for (var i = 0; i < provas.length; i += loteProvas) {
+      final fim = i + loteProvas < provas.length ? i + loteProvas : provas.length;
+      await _enviarCorpo('POST', caminho, {
+        'provas': [for (final p in provas.sublist(i, fim)) p.toJson()],
+      });
+    }
+  }
+
+  @override
+  Future<ResultadoSgp> buscarProvasSgp(String cavaloId) async {
+    try {
+      final resposta = await _cliente
+          .get(_rota('/cavalos/${Uri.encodeComponent(cavaloId)}/provas/sgp'), headers: _cabecalhosPadrao)
+          .timeout(tempoLimite);
+      if (resposta.statusCode == 401 || resposta.statusCode == 403) {
+        _recusar(resposta, 'importar do SGP');
+      }
+      final corpo = jsonDecode(utf8.decode(resposta.bodyBytes));
+      if (resposta.statusCode != 200) {
+        final mensagem = corpo is Map && corpo['erro'] is String ? corpo['erro'] as String : null;
+        throw ErroFonte(
+          mensagem ?? 'A API recusou a consulta ao SGP (${resposta.statusCode}).',
+          status: resposta.statusCode,
+        );
+      }
+      return ResultadoSgp.fromJson(corpo as Map<String, dynamic>);
+    } on ErroFonte {
+      rethrow;
+    } catch (erro) {
+      throw ErroFonte('Não foi possível consultar o SGP.', causa: erro);
+    }
+  }
+
+  @override
   Future<String> enviarMidia(
     String cavaloId, {
     required List<int> bytes,
@@ -189,10 +270,10 @@ class FonteHttp implements FonteDeDados {
             },
             body: bytes,
           )
-          .timeout(tempoLimite);
+          .timeout(prazoEnvio(bytes.length));
 
       if (resposta.statusCode != 201) {
-        if (resposta.statusCode >= 400) _recusar(resposta.statusCode, 'enviar a mídia');
+        if (resposta.statusCode >= 400) _recusar(resposta, 'enviar a mídia');
         throw ErroFonte(
           'A API respondeu ${resposta.statusCode} ao enviar a mídia.',
           status: resposta.statusCode,
@@ -207,6 +288,11 @@ class FonteHttp implements FonteDeDados {
       return arquivo;
     } on ErroFonte {
       rethrow;
+    } on TimeoutException catch (erro) {
+      throw ErroFonte(
+        'O envio demorou demais. Tente de novo pelo Wi-Fi ou com um arquivo menor.',
+        causa: erro,
+      );
     } catch (erro) {
       throw ErroFonte('Não foi possível enviar a mídia.', causa: erro);
     }

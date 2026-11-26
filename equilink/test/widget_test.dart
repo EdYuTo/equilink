@@ -47,7 +47,8 @@ void main() {
 
   group('repositório', () {
     test('concluir toda a rotina atualiza a última limpeza', () async {
-      final repositorio = Repositorio(FonteMemoria());
+      // Relógio fixo no dia dos dados de demonstração.
+      final repositorio = Repositorio(FonteMemoria(), agora: () => DateTime(2026, 10, 14));
       await repositorio.carregar();
       final baia = repositorio.baia('01')!;
       final limpezaAnterior = baia.ultimaLimpeza;
@@ -568,6 +569,17 @@ void main() {
     testWidgets('sair do registro inexistente leva ao destaque', (tester) async {
       await abrirEm(tester, '/cavalo/NAO-EXISTE');
       await tester.tap(find.text('Ver o perfil em destaque'));
+      await tester.pumpAndSettle();
+      expect(find.text('ISABEL TORO LEO'), findsOneWidget);
+      expect(urlAtual(tester), '/perfil');
+    });
+
+    testWidgets('endereço desconhecido mostra a página em português (EQL-027)', (tester) async {
+      await abrirEm(tester, '/naoexiste');
+      expect(find.text('Page Not Found'), findsNothing);
+      expect(find.text('Página não encontrada'), findsOneWidget);
+
+      await tester.tap(find.text('Ir para o perfil'));
       await tester.pumpAndSettle();
       expect(find.text('ISABEL TORO LEO'), findsOneWidget);
       expect(urlAtual(tester), '/perfil');

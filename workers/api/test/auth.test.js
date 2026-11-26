@@ -13,13 +13,14 @@ import {
   bytesParaBase64,
   conferirSenha,
   cookieDeSessao,
+  cookieRenovado,
   derivarHash,
   emitirSessao,
   gerarSalt,
+  hashIp,
   iguaisEmTempoConstante,
   lerCookie,
   lerSessao,
-  paraHex,
   segundosAteExpirar,
 } from '../src/auth.js';
 
@@ -121,10 +122,56 @@ test('comparação em tempo constante acerta igualdade e diferença', () => {
   assert.equal(iguaisEmTempoConstante('', ''), true);
 });
 
-test('hash de IP não guarda o endereço em claro', () => {
-  const hash = paraHex(new TextEncoder().encode('200.1.2.3:segredo'));
-  assert.ok(!hash.includes('200.1.2.3'));
+test('base64 vai e volta', () => {
   assert.equal(base64ParaBytes(bytesParaBase64(new Uint8Array([1, 2, 3]))).join(','), '1,2,3');
+});
+
+// EQL-001: o hash antigo era o hex de "ip:SESSION_SECRET", reversível.
+test('hash de IP é de mão única e não carrega o IP nem o segredo', async () => {
+  const env = { SESSION_SECRET: 'segredo-de-sessao-123' };
+  const hash = await hashIp('200.1.2.3', env);
+  assert.match(hash, /^[0-9a-f]{64}$/);
+  const decodificado = Buffer.from(hash, 'hex').toString('latin1');
+  assert.ok(!decodificado.includes('200.1.2.3'));
+  assert.ok(!decodificado.includes('segredo-de-sessao-123'));
+  assert.ok(!hash.includes(Buffer.from('segredo-de-sessao-123').toString('hex')));
+  // Estável para o mesmo IP (o bloqueio precisa contar), diferente entre IPs.
+  assert.equal(await hashIp('200.1.2.3', env), hash);
+  assert.notEqual(await hashIp('200.1.2.4', env), hash);
+  // Com chave própria, muda; e trocar o segredo de sessão não muda essa chave.
+  const proprio = await hashIp('200.1.2.3', { SESSION_SECRET: 'x', IP_HASH_SECRET: 'k' });
+  assert.notEqual(proprio, hash);
+  assert.equal(await hashIp('200.1.2.3', { SESSION_SECRET: 'y', IP_HASH_SECRET: 'k' }), proprio);
+});
+
+// EQL-002: a renovação mantém a sessão viva com uso, sem passar do teto de 8 h.
+test('cookie renovado reinicia a inatividade e mantém o teto de 8 h', async () => {
+  const t0 = Date.now();
+  const original = await lerSessao(await emitirSessao('igor', SEGREDO, t0), SEGREDO, t0 + 50 * 60 * 1000);
+  assert.ok(original.renovavel);
+
+  const t1 = t0 + 50 * 60 * 1000;
+  const cookie = await cookieRenovado(original, SEGREDO, { agora: t1 });
+  const valor = /equilink_sessao=([^;]+)/.exec(cookie)[1];
+  const maxAge = Number(/Max-Age=(\d+)/.exec(cookie)[1]);
+  assert.equal(maxAge, Math.floor((original.expiraEm - t1) / 1000), 'Max-Age é o que falta do teto');
+
+  // 100 min depois do login, mas 50 desde a renovação: ainda vale.
+  const depois = await lerSessao(valor, SEGREDO, t0 + 100 * 60 * 1000);
+  assert.equal(depois?.usuarioId, 'igor');
+  assert.equal(depois.expiraEm, original.expiraEm, 'o teto não anda');
+
+  // Mesmo renovando sempre, passadas 8 h a sessão acaba.
+  let s = original;
+  let agora = t1;
+  while (agora < t0 + 8 * 3600 * 1000) {
+    const c = await cookieRenovado(s, SEGREDO, { agora });
+    agora += 30 * 60 * 1000;
+    s = await lerSessao(/equilink_sessao=([^;]+)/.exec(c)[1], SEGREDO, agora);
+    if (!s) break;
+  }
+  assert.equal(s, null);
+  assert.ok(agora <= t0 + 8 * 3600 * 1000 + 30 * 60 * 1000);
 });
 
 test('sessão cai depois de 1 hora sem uso', async () => {

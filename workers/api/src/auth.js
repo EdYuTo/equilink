@@ -151,11 +151,12 @@ async function assinar(dados, segredo) {
  *
  * `a` é o instante do último uso conhecido; sem ele a sessão nasce agora.
  */
-export async function emitirSessao(usuarioId, segredo, agora = Date.now(), ultimoUso = null) {
+export async function emitirSessao(usuarioId, segredo, agora = Date.now(), ultimoUso = null, expiraEm = null) {
   const segundos = Math.floor(agora / 1000);
   const dados = {
     u: usuarioId,
-    e: segundos + VALIDADE_SESSAO,
+    // Renovar não estende o teto de 8 h: a sessão renovada herda o prazo da original.
+    e: expiraEm ? Math.floor(expiraEm / 1000) : segundos + VALIDADE_SESSAO,
     a: ultimoUso ?? segundos,
   };
   const corpo = textoBase64Url(textoJson(dados));
@@ -193,6 +194,34 @@ export async function lerSessao(valor, segredo, agora = Date.now()) {
     ultimoUso,
     renovavel: agora - ultimoUso >= MARGEM_RENOVACAO * 1000,
   };
+}
+
+/**
+ * Cookie que renova o relógio de inatividade de uma sessão válida (EQL-002).
+ * Mantém o teto absoluto da sessão original, e o `Max-Age` é o que falta dele.
+ */
+export async function cookieRenovado(sessao, segredo, { seguro = true, agora = Date.now() } = {}) {
+  const valor = await emitirSessao(sessao.usuarioId, segredo, agora, null, sessao.expiraEm);
+  const maxAge = Math.max(0, Math.floor((sessao.expiraEm - agora) / 1000));
+  return cookieDeSessao(valor, { seguro, maxAge });
+}
+
+/**
+ * Hash do IP para o bloqueio por tentativas (EQL-001): HMAC-SHA256 de mão
+ * única, com chave própria. Sem `IP_HASH_SECRET`, a chave é derivada do
+ * `SESSION_SECRET` por outro HMAC, de modo que nada do segredo pode ser
+ * recuperado a partir do banco.
+ */
+export async function hashIp(ip, env) {
+  const codificar = (t) => new TextEncoder().encode(t);
+  const hmac = async (chave, dado) => {
+    const k = await crypto.subtle.importKey('raw', chave, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return new Uint8Array(await crypto.subtle.sign('HMAC', k, dado));
+  };
+  const chave = env.IP_HASH_SECRET
+    ? codificar(env.IP_HASH_SECRET)
+    : await hmac(codificar(env.SESSION_SECRET ?? ''), codificar('equilink:ip-hash:v1'));
+  return paraHex(await hmac(chave, codificar(ip)));
 }
 
 /** Quanto falta para a sessão cair por inatividade, em segundos. */

@@ -93,7 +93,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
             tooltip: 'Compartilhar perfil',
             icon: const Icon(Icons.ios_share),
             onPressed: () =>
-                CompartilhamentoPerfil.compartilhar(context, repositorio),
+                CompartilhamentoPerfil.compartilhar(context, repositorio, origem: 'perfil'),
           ),
         ],
       ),
@@ -305,11 +305,17 @@ class _TelaPerfilState extends State<TelaPerfil> {
       ),
     );
     if (resultado != null && resultado.isNotEmpty) {
-      await repositorio.atualizarDescricao(repositorio.cavaloObrigatorio.id, resultado);
-      repositorio.analytics.funil('conteudo', 'descricao_editada');
+      final ok = await repositorio.atualizarDescricao(repositorio.cavaloObrigatorio.id, resultado);
+      if (ok) repositorio.analytics.funil('conteudo', 'descricao_editada');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Descrição atualizada com sucesso.')),
+          SnackBar(
+            content: Text(
+              ok
+                  ? 'Descrição atualizada com sucesso.'
+                  : repositorio.erro ?? 'Não foi possível salvar a descrição.',
+            ),
+          ),
         );
       }
     }
@@ -521,10 +527,7 @@ class _ListaVideos extends StatelessWidget {
                   children: [
                     AspectRatio(
                       aspectRatio: 16 / 9,
-                      child: ImagemMidia(
-                        video.poster ?? MidiaPadrao.capaVideo,
-                        ajuste: BoxFit.cover,
-                      ),
+                      child: CapaVideo(video),
                     ),
                     Positioned.fill(
                       child: ColoredBox(
@@ -540,7 +543,7 @@ class _ListaVideos extends StatelessWidget {
                         ),
                       ),
                     ),
-                    Positioned(
+                    if (video.duracaoSegundos != null) Positioned(
                       right: Espacos.x2,
                       bottom: Espacos.x2,
                       child: Container(
@@ -553,7 +556,7 @@ class _ListaVideos extends StatelessWidget {
                           borderRadius: BorderRadius.circular(Raios.total),
                         ),
                         child: Text(
-                          duracaoVideo(video.duracaoSegundos ?? 0),
+                          duracaoVideo(video.duracaoSegundos!),
                           style: const TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w600,
@@ -725,9 +728,12 @@ class _LinhaParentesco extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              // Registro como foi gravado, igual à aba Genealogia: um pai
+              // importado tem registro AQHA, não ABQM.
               Text(
-                'ABQM ${ancestral.registro.replaceAll(RegExp(r'^(ABQM|AQHA) '), '')}'
-                '${ancestral.pelagem != null ? ' • ${ancestral.pelagem}' : ''}',
+                [ancestral.registro.trim(), ?ancestral.pelagem]
+                    .where((parte) => parte.isNotEmpty)
+                    .join(' • '),
                 style: const TextStyle(
                   fontSize: 12,
                   color: Cores.textoSecundario,

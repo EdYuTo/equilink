@@ -35,9 +35,12 @@ class _TelaProvasState extends State<TelaProvas> {
 
     final totalProvas = linhas.length;
     final totalVitorias = linhas.where((l) => l.prova.vitoria as bool).length;
-    final melhor = linhas.isEmpty
-        ? null
-        : Analise.menorValor(linhas.map((l) => l.prova.tempoSegundos as double));
+    // Passada sem tempo (zero, "SAT" no SGP) não conta como melhor tempo.
+    final tempos = [
+      for (final l in linhas)
+        if ((l.prova.tempoSegundos as double) > 0) l.prova.tempoSegundos as double,
+    ];
+    final melhor = tempos.isEmpty ? null : Analise.menorValor(tempos);
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -167,7 +170,7 @@ class _TelaProvasState extends State<TelaProvas> {
                         ),
                         Text(
                           '${_data(linha.prova.data as DateTime)} • '
-                          '${(linha.prova.tempoSegundos as double).toStringAsFixed(3).replaceAll('.', ',')}s',
+                          '${tempoProvaCompacto(linha.prova.tempoSegundos as double)}',
                           style: const TextStyle(fontSize: 12, color: AdminCores.textoSecundario),
                         ),
                         const SizedBox(width: 10),

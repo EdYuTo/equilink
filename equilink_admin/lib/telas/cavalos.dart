@@ -6,6 +6,7 @@ import '../core/escopo.dart';
 import '../core/tema.dart';
 import '../rotas.dart';
 import '../widgets/comuns.dart';
+import '../widgets/imagem.dart';
 
 /// Lista de animais do acervo, com busca e ações de criar, duplicar e remover.
 class TelaCavalos extends StatefulWidget {
@@ -135,10 +136,9 @@ class _CartaoCavalo extends StatelessWidget {
             child: SizedBox(
               width: 52,
               height: 52,
-              child: Image.asset(
+              child: ImagemAcervo(
                 cavalo.fotoPerfil,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const ColoredBox(
+                semImagem: const ColoredBox(
                   color: AdminCores.superficieSuave,
                   child: Icon(Icons.pets, color: AdminCores.textoSecundario),
                 ),
@@ -201,10 +201,16 @@ class _CartaoCavalo extends StatelessWidget {
             IconButton(
               tooltip: 'Definir como destaque do app',
               onPressed: () async {
-                await rep.definirPrincipal(cavalo.id);
+                final ok = await rep.definirPrincipal(cavalo.id);
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${cavalo.nome} agora é o destaque do aplicativo.')),
+                  SnackBar(
+                    content: Text(
+                      ok
+                          ? '${cavalo.nome} agora é o destaque do aplicativo.'
+                          : rep.erro ?? 'Não foi possível destacar ${cavalo.nome}.',
+                    ),
+                  ),
                 );
               },
               icon: const Icon(Icons.star_border, size: 19),
@@ -251,10 +257,12 @@ class _CartaoCavalo extends StatelessWidget {
       ),
     );
     if (confirmar != true) return;
-    await rep.removerCavalo(cavalo.id);
+    final ok = await rep.removerCavalo(cavalo.id);
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${cavalo.nome} removido.')),
+      SnackBar(
+        content: Text(ok ? '${cavalo.nome} removido.' : rep.erro ?? 'Não foi possível remover ${cavalo.nome}.'),
+      ),
     );
   }
 }

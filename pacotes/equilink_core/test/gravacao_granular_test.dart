@@ -79,6 +79,36 @@ class _FonteObservada implements FonteDeDados {
   }
 
   @override
+  Future<void> salvarProvas(String cavaloId, List<Prova> provas) async {
+    escritas.add('salvarProvas($cavaloId, ${provas.length})');
+    final alvo = _acervo.cavaloPorId(cavaloId)!;
+    final porId = {for (final p in provas) p.id: p};
+    await salvarCavalo(
+      alvo.copiarCom(provas: [for (final p in alvo.provas) porId.remove(p.id) ?? p, ...porId.values]),
+    );
+  }
+
+  @override
+  Future<void> removerProva(String cavaloId, String provaId) async {
+    escritas.add('removerProva($cavaloId, $provaId)');
+    final alvo = _acervo.cavaloPorId(cavaloId)!;
+    await salvarCavalo(alvo.copiarCom(provas: [for (final p in alvo.provas) if (p.id != provaId) p]));
+  }
+
+  @override
+  Future<void> removerMidia(String cavaloId, String midiaId) async {
+    escritas.add('removerMidia($cavaloId, $midiaId)');
+    final alvo = _acervo.cavaloPorId(cavaloId)!;
+    await salvarCavalo(alvo.copiarCom(midias: [for (final m in alvo.midias) if (m.id != midiaId) m]));
+  }
+
+  @override
+  Future<ResultadoSgp> buscarProvasSgp(String cavaloId) async {
+    escritas.add('buscarProvasSgp($cavaloId)');
+    return const ResultadoSgp(encontrado: false);
+  }
+
+  @override
   Future<String> enviarMidia(
     String cavaloId, {
     required List<int> bytes,
@@ -169,6 +199,28 @@ void main() {
 
       expect(fonte.escritas.first, contains('salvarProva(isabel-toro-leo'));
       expect(fonte.escritas.any((e) => e.startsWith('salvar(')), isFalse);
+    });
+
+    // EQL-008: remover caía no `salvar` do acervo inteiro, que só insere e
+    // atualiza; o item voltava.
+    test('remover prova e mídia usa a remoção, não o acervo', () async {
+      final cavalo = repo.cavaloPorId('isabel-toro-leo')!;
+      await repo.removerProva(cavalo.id, cavalo.provas.first.id);
+      await repo.removerMidia(cavalo.id, cavalo.midias.first.id);
+
+      expect(fonte.escritas, [
+        'removerProva(isabel-toro-leo, ${cavalo.provas.first.id})',
+        'salvarCavalo(isabel-toro-leo)',
+        'removerMidia(isabel-toro-leo, ${cavalo.midias.first.id})',
+        'salvarCavalo(isabel-toro-leo)',
+      ]);
+      expect(repo.cavaloPorId(cavalo.id)!.provas.any((p) => p.id == cavalo.provas.first.id), isFalse);
+    });
+
+    test('editar a descrição grava só aquele cavalo', () async {
+      await repo.atualizarDescricao('isabel-toro-leo', 'Nova descrição');
+      expect(fonte.escritas, ['salvarCavalo(isabel-toro-leo)']);
+      expect(repo.cavaloPorId('isabel-toro-leo')!.descricao, 'Nova descrição');
     });
 
     test('mexer no manejo grava apenas a baia afetada', () async {

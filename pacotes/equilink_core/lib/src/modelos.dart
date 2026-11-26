@@ -275,6 +275,10 @@ class Prova {
   bool get vitoria => colocacao == 1;
   bool get podio => temColocacao && colocacao <= 3;
 
+  /// Zero significa passada sem tempo válido (no SGP, "SAT"): não conta em
+  /// melhor tempo nem em média.
+  bool get temTempo => tempoSegundos > 0;
+
   factory Prova.fromJson(Map<String, dynamic> j) => Prova(
     id: j['id'] as String? ?? '',
     data: _data(j['data']),
@@ -340,7 +344,8 @@ class Midia {
   final String id;
   final TipoMidia tipo;
 
-  /// Caminho do asset (fotos) ou do vídeo empacotado no aplicativo.
+  /// URL da mídia enviada pelo painel, ou caminho do asset empacotado no
+  /// aplicativo (dados de demonstração).
   final String arquivo;
   final String legenda;
   final int? duracaoSegundos;
@@ -670,17 +675,23 @@ class Cavalo {
   int get vitorias => provas.where((p) => p.vitoria).length;
   int get podios => provas.where((p) => p.podio).length;
 
-  double? get melhorTempo =>
-      provas.isEmpty ? null : provas.map((p) => p.tempoSegundos).reduce((a, b) => a < b ? a : b);
+  /// Passadas com tempo válido: as únicas que entram em melhor tempo e média.
+  Iterable<Prova> get _cronometradas => provas.where((p) => p.temTempo);
 
-  double? get tempoMedio => provas.isEmpty
-      ? null
-      : provas.fold<double>(0, (a, p) => a + p.tempoSegundos) / provas.length;
+  double? get melhorTempo {
+    final tempos = _cronometradas.map((p) => p.tempoSegundos);
+    return tempos.isEmpty ? null : tempos.reduce((a, b) => a < b ? a : b);
+  }
 
-  /// Média das 5 provas mais recentes (indicador de forma atual).
+  double? get tempoMedio {
+    final tempos = _cronometradas.map((p) => p.tempoSegundos).toList();
+    return tempos.isEmpty ? null : tempos.fold<double>(0, (a, t) => a + t) / tempos.length;
+  }
+
+  /// Média das 5 provas cronometradas mais recentes (indicador de forma atual).
   double? get tempoMedioRecente {
-    if (provas.isEmpty) return null;
-    final ordenadas = [...provas]..sort((a, b) => b.data.compareTo(a.data));
+    final ordenadas = _cronometradas.toList()..sort((a, b) => b.data.compareTo(a.data));
+    if (ordenadas.isEmpty) return null;
     final ultimas = ordenadas.take(5).toList();
     return ultimas.fold<double>(0, (a, p) => a + p.tempoSegundos) / ultimas.length;
   }

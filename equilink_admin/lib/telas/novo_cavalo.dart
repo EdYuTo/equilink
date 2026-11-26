@@ -9,6 +9,7 @@ import '../core/escopo.dart';
 import '../core/tema.dart';
 import '../rotas.dart';
 import '../widgets/comuns.dart';
+import '../widgets/imagem.dart';
 
 /// Cadastro completo de um cavalo, em passos.
 ///
@@ -103,26 +104,16 @@ class _TelaNovoCavaloState extends State<TelaNovoCavalo> {
   bool get _identificacaoValida =>
       _nome.text.trim().isNotEmpty && _registro.text.trim().isNotEmpty;
 
-  /// Tipos aceitos pela API; a mesma lista vive em `TIPOS_MIDIA` no Worker.
-  static const _tiposAceitos = {
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'png': 'image/png',
-    'webp': 'image/webp',
-    'avif': 'image/avif',
-    'gif': 'image/gif',
-  };
-
   Future<void> _escolherFoto() async {
     final escolhido = await FilePicker.pickFile(
       dialogTitle: 'Escolher foto de perfil',
       type: FileType.custom,
-      allowedExtensions: _tiposAceitos.keys.toList(),
+      allowedExtensions: tiposImagemAceitos.keys.toList(),
     );
     if (escolhido == null) return;
 
     final extensao = (escolhido.extension ?? '').toLowerCase();
-    final tipo = _tiposAceitos[extensao];
+    final tipo = tiposImagemAceitos[extensao];
     if (tipo == null) {
       setState(() => _erroFoto = 'Extensão .$extensao não é aceita.');
       return;
@@ -253,7 +244,10 @@ class _TelaNovoCavaloState extends State<TelaNovoCavalo> {
       return;
     }
 
-    // Foto: envia com o cavalo já gravado, para a API aceitar o upload.
+    // Foto: envia com o cavalo já gravado, para a API aceitar o upload. Se
+    // falhar, o animal fica com a imagem padrão e o aviso diz isso — antes a
+    // falha só aparecia na faixa vermelha e o cadastro parecia completo.
+    String? falhaFoto;
     if (_fotoBytes != null) {
       final url = await rep.enviarMidia(
         idFinal,
@@ -261,9 +255,13 @@ class _TelaNovoCavaloState extends State<TelaNovoCavalo> {
         tipoConteudo: _fotoTipo!,
         nomeArquivo: _fotoNome!,
       );
-      if (url != null) {
+      if (url == null) {
+        falhaFoto = rep.erro ?? 'erro desconhecido.';
+      } else {
         foto = url;
-        await rep.salvarCavalo(novo.copiarCom(fotoPerfil: url));
+        if (!await rep.salvarCavalo(novo.copiarCom(fotoPerfil: url))) {
+          falhaFoto = rep.erro ?? 'erro desconhecido.';
+        }
       }
     }
 
@@ -274,7 +272,12 @@ class _TelaNovoCavaloState extends State<TelaNovoCavalo> {
     if (!mounted) return;
     context.go(RotasAdmin.cavalo(idFinal));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${novo.nome} cadastrado.')),
+      falhaFoto == null
+          ? SnackBar(content: Text('${novo.nome} cadastrado.'))
+          : SnackBar(
+              duration: const Duration(seconds: 8),
+              content: Text('${novo.nome} cadastrado, mas a foto não foi enviada: $falhaFoto'),
+            ),
     );
   }
 

@@ -6,6 +6,9 @@ import '../escopo.dart';
 import '../widgets/comuns.dart';
 import '../widgets/marca.dart';
 
+/// Valor do filtro de ano que mostra todas as provas.
+const _todosOsAnos = 0;
+
 /// Tela "Histórico Esportivo": provas disputadas, resultados detalhados e
 /// estatísticas de desempenho.
 class TelaHistorico extends StatefulWidget {
@@ -17,6 +20,9 @@ class TelaHistorico extends StatefulWidget {
 
 class _TelaHistoricoState extends State<TelaHistorico> {
   int _aba = 0;
+
+  /// Ano escolhido no filtro; `null` até a primeira escolha (abre no mais
+  /// recente) e [_todosOsAnos] para "Todos".
   int? _anoSelecionado;
 
   @override
@@ -25,8 +31,8 @@ class _TelaHistoricoState extends State<TelaHistorico> {
     final cavalo = repositorio.cavaloObrigatorio;
     final provas = cavalo.provasRecentes;
     final anos = provas.map((p) => p.data.year).toSet().toList()..sort((a, b) => b - a);
-    final anoAtivo = _anoSelecionado ?? (anos.isNotEmpty ? anos.first : null);
-    final filtradas = anoAtivo == null
+    final anoAtivo = _anoSelecionado ?? (anos.isNotEmpty ? anos.first : _todosOsAnos);
+    final filtradas = anoAtivo == _todosOsAnos
         ? provas
         : provas.where((p) => p.data.year == anoAtivo).toList();
 
@@ -156,8 +162,8 @@ class _FiltroAnos extends StatelessWidget {
   const _FiltroAnos({required this.anos, required this.selecionado, required this.aoSelecionar});
 
   final List<int> anos;
-  final int? selecionado;
-  final ValueChanged<int?> aoSelecionar;
+  final int selecionado;
+  final ValueChanged<int> aoSelecionar;
 
   @override
   Widget build(BuildContext context) {
@@ -168,8 +174,8 @@ class _FiltroAnos extends StatelessWidget {
         children: [
           _Chip(
             rotulo: 'Todos',
-            ativo: selecionado == null,
-            aoTocar: () => aoSelecionar(null),
+            ativo: selecionado == _todosOsAnos,
+            aoTocar: () => aoSelecionar(_todosOsAnos),
           ),
           for (final ano in anos)
             _Chip(
@@ -447,7 +453,7 @@ class _Estatisticas extends StatelessWidget {
     final taxaPodio = total == 0 ? 0.0 : cavalo.podios / total;
     final mensal = repositorio.desempenhoPorMes();
     final distribuicao = repositorio.distribuicaoColocacoes;
-    final melhorMensal = mensal.isEmpty
+    final piorMensal = mensal.isEmpty
         ? 0.0
         : Analise.maiorValor(mensal.map((m) => m.melhorTempo));
 
@@ -527,10 +533,10 @@ class _Estatisticas extends StatelessWidget {
             children: [
               const TituloSecao(
                 'Evolução mensal',
-                subtitulo: 'Melhor tempo registrado em cada mês',
+                subtitulo: 'Melhor tempo de cada mês: quanto mais alta a barra, mais rápido',
               ),
               const SizedBox(height: Espacos.x4),
-              _GraficoEvolucao(dados: mensal, piorTempo: melhorMensal),
+              _GraficoEvolucao(dados: mensal, piorTempo: piorMensal),
             ],
           ),
         ),
@@ -605,7 +611,8 @@ class _Indicador extends StatelessWidget {
   }
 }
 
-/// Gráfico de colunas do melhor tempo por mês.
+/// Gráfico de colunas do melhor tempo por mês. O mês mais rápido tem a barra
+/// cheia e o mais lento a menor; a altura cai com a diferença de tempo.
 class _GraficoEvolucao extends StatelessWidget {
   const _GraficoEvolucao({required this.dados, required this.piorTempo});
 
@@ -621,7 +628,7 @@ class _GraficoEvolucao extends StatelessWidget {
       );
     }
     final menor = Analise.menorValor(dados.map((d) => d.melhorTempo));
-    final base = piorTempo == 0 ? 1.0 : piorTempo;
+    final faixa = piorTempo - menor;
     return SizedBox(
       height: 190,
       child: Row(
@@ -647,7 +654,9 @@ class _GraficoEvolucao extends StatelessWidget {
                       child: Align(
                         alignment: Alignment.bottomCenter,
                         child: FractionallySizedBox(
-                          heightFactor: (d.melhorTempo / base).clamp(0.15, 1.0),
+                          heightFactor: faixa <= 0
+                              ? 1.0
+                              : (1 - 0.85 * (d.melhorTempo - menor) / faixa).clamp(0.15, 1.0),
                           child: Container(
                             decoration: BoxDecoration(
                               color: d.melhorTempo == menor ? Cores.verde : Cores.dourado,
@@ -661,9 +670,13 @@ class _GraficoEvolucao extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      d.rotulo,
-                      style: const TextStyle(fontSize: 10, color: Cores.textoSecundario),
+                    // `set/25` não cabe em colunas estreitas: reduz em vez de quebrar.
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        d.rotulo,
+                        style: const TextStyle(fontSize: 10, color: Cores.textoSecundario),
+                      ),
                     ),
                   ],
                 ),

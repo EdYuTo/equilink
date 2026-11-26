@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:equilink_core/equilink_core.dart';
 
@@ -63,6 +64,57 @@ void main() {
     expect(midia.entidade, 'midia');
     expect(midia.texto('tipo'), 'foto');
     expect(midia.texto('origem'), 'grade');
+  });
+
+  group('compartilhamento (EQL-028)', () {
+    const canal = MethodChannel('dev.fluttercommunity.plus/share');
+    final compartilhados = <Object?>[];
+
+    setUp(() {
+      compartilhados.clear();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        canal,
+        (chamada) async {
+          compartilhados.add(chamada.arguments);
+          return 'dev.fluttercommunity.plus/share/unavailable';
+        },
+      );
+    });
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(canal, null);
+    });
+
+    testWidgets('compartilhar o perfil gera evento com o cavalo e a origem', (tester) async {
+      final coletor = await abrir(tester);
+
+      await tester.tap(find.byTooltip('Compartilhar perfil'));
+      await tester.pumpAndSettle();
+
+      expect(compartilhados, hasLength(1));
+      final evento = coletor.eventos.firstWhere(
+        (e) => e.nome == 'perfil_compartilhado',
+        orElse: () => throw StateError('compartilhamento não instrumentado'),
+      );
+      expect(evento.entidade, 'cavalo');
+      expect(evento.entidadeId, FonteMemoria.acervoDeDemonstracao().principal!.id);
+      expect(evento.texto('origem'), 'perfil');
+      expect(evento.texto('status'), 'unavailable');
+    });
+
+    testWidgets('compartilhar a galeria registra a origem galeria', (tester) async {
+      final coletor = await abrir(tester);
+
+      await irPara(tester, 'Fotos');
+      await tester.tap(find.byTooltip('Compartilhar galeria'));
+      await tester.pumpAndSettle();
+
+      final evento = coletor.eventos.firstWhere(
+        (e) => e.nome == 'perfil_compartilhado',
+        orElse: () => throw StateError('compartilhamento não instrumentado'),
+      );
+      expect(evento.texto('origem'), 'galeria');
+    });
   });
 
   testWidgets('registra mudança de aba com o nome da aba', (tester) async {

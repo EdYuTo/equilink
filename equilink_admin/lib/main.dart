@@ -24,13 +24,16 @@ void main() {
 /// Compartilha o mesmo núcleo de dados do aplicativo do usuário: ler e gravar
 /// aqui reflete no app, porque ambos conversam com a mesma [FonteDeDados].
 class PainelApp extends StatefulWidget {
-  const PainelApp({super.key, this.fonte, this.coletorAnalitico});
+  const PainelApp({super.key, this.fonte, this.coletorAnalitico, this.sessaoApi});
 
   /// Permite injetar uma fonte nos testes; em produção vem de [Ambiente].
   final FonteDeDados? fonte;
 
   /// Permite injetar o coletor de analytics nos testes.
   final ColetorAnaliticoPainel? coletorAnalitico;
+
+  /// Permite injetar o cliente de sessão nos testes; em produção vem de [Ambiente].
+  final SessaoApi? sessaoApi;
 
   @override
   State<PainelApp> createState() => _PainelAppState();
@@ -42,7 +45,7 @@ class _PainelAppState extends State<PainelApp> {
   late final _roteador = criarRoteadorAdmin();
 
   /// Cliente de sessão; `null` quando a fonte é memória (testes/demonstração).
-  late final SessaoApi? _sessaoApi = Ambiente.criarSessao();
+  late final SessaoApi? _sessaoApi = widget.sessaoApi ?? Ambiente.criarSessao();
 
   /// Sessão resolvida. `null` = ninguém autenticado.
   Sessao? _sessao;
@@ -222,6 +225,35 @@ class _PainelAppState extends State<PainelApp> {
   }
 }
 
+/// Dá ao login a camada de sobreposição que ele não tem.
+///
+/// O login é desenhado no `builder` do app, acima do roteador e de qualquer
+/// `Navigator`. Campo de texto (alças e menu de seleção) e dica de botão
+/// precisam de um `Overlay` ancestral; sem ele, focar o campo "Usuário", que
+/// tem autofoco, quebrava a cada carregamento (EQL-042).
+class _ComSobreposicao extends StatefulWidget {
+  const _ComSobreposicao({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_ComSobreposicao> createState() => _ComSobreposicaoState();
+}
+
+class _ComSobreposicaoState extends State<_ComSobreposicao> {
+  late final OverlayEntry _entrada = OverlayEntry(builder: (_) => widget.child);
+
+  @override
+  void didUpdateWidget(_ComSobreposicao antigo) {
+    super.didUpdateWidget(antigo);
+    // A entrada só se reconstrói quando pedida: assim o motivo do login muda.
+    _entrada.markNeedsBuild();
+  }
+
+  @override
+  Widget build(BuildContext context) => Overlay(initialEntries: [_entrada]);
+}
+
 /// Só libera o painel quando o acervo está disponível.
 class _Portao extends StatelessWidget {
   const _Portao({
@@ -250,10 +282,12 @@ class _Portao extends StatelessWidget {
   Widget build(BuildContext context) {
     // Com backend: sem sessão não há painel, nem no modo de erro.
     if (sessaoApi != null && sessao == null) {
-      return TelaLogin(
-        sessaoApi: sessaoApi!,
-        aoEntrar: aoEntrar ?? (_) {},
-        motivo: motivoLogin,
+      return _ComSobreposicao(
+        child: TelaLogin(
+          sessaoApi: sessaoApi!,
+          aoEntrar: aoEntrar ?? (_) {},
+          motivo: motivoLogin,
+        ),
       );
     }
 
