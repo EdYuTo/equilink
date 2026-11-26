@@ -321,7 +321,8 @@ class Repositorio extends ChangeNotifier {
   /// Desempenho agrupado por mês (gráfico do histórico esportivo).
   ///
   /// Só meses com passada cronometrada, e no máximo os 12 mais recentes: um
-  /// histórico importado tem anos de provas, e o gráfico não cabe.
+  /// histórico importado tem anos de provas, e o gráfico não cabe. Quando os
+  /// meses mostrados passam de um ano, o rótulo leva o ano (`set/25`).
   List<({String rotulo, int provas, int vitorias, double melhorTempo})> desempenhoPorMes() {
     final alvo = cavalo;
     if (alvo == null) return const [];
@@ -331,10 +332,17 @@ class Repositorio extends ChangeNotifier {
     }
     final todas = mapa.keys.toList()..sort();
     final chaves = todas.length > 12 ? todas.sublist(todas.length - 12) : todas;
+    final variosAnos = chaves.map((k) => k.split('-')[0]).toSet().length > 1;
+    String rotulo(String chave) {
+      final [ano, mes] = chave.split('-');
+      final nome = _mesAbreviado(int.parse(mes));
+      return variosAnos ? '$nome/${ano.substring(ano.length - 2)}' : nome;
+    }
+
     return [
       for (final k in chaves)
         (
-          rotulo: _mesAbreviado(int.parse(k.split('-')[1])),
+          rotulo: rotulo(k),
           provas: mapa[k]!.length,
           vitorias: mapa[k]!.where((p) => p.vitoria).length,
           melhorTempo: mapa[k]!.map((p) => p.tempoSegundos).reduce(min),

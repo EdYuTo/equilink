@@ -69,6 +69,32 @@ void main() {
       expect(mensal.first.melhorTempo, closeTo(17.13, 1e-9), reason: 'começa em jan/2025');
       expect(mensal.last.melhorTempo, closeTo(17.24, 1e-9));
       expect(mensal.every((m) => m.melhorTempo > 0), isTrue);
+      // Os 12 meses mostrados são todos de 2025: o rótulo dispensa o ano.
+      expect(mensal.first.rotulo, 'jan');
+      expect(mensal.last.rotulo, 'dez');
+    });
+
+    test('meses de anos diferentes levam o ano no rótulo (EQL-026)', () async {
+      final repo = Repositorio(FonteMemoria());
+      await repo.carregar();
+      await repo.salvarCavalo(_comProvas(repo.cavalo!, [
+        _prova('a', DateTime(2025, 9, 28), 17.5),
+        _prova('b', DateTime(2026, 9, 6), 17.1),
+      ]));
+
+      expect(repo.desempenhoPorMes().map((m) => m.rotulo), ['set/25', 'set/26']);
+    });
+
+    test('prova sem colocação fica fora da distribuição (EQL-026)', () async {
+      final repo = Repositorio(FonteMemoria());
+      await repo.carregar();
+      await repo.salvarCavalo(_comProvas(repo.cavalo!, [
+        _prova('a', DateTime(2026, 3, 1), 17.0, colocacao: 1),
+        _prova('b', DateTime(2026, 3, 2), 17.2, colocacao: 0),
+      ]));
+
+      expect(repo.distribuicaoColocacoes, {'1º': 1});
+      expect(repo.cavalo!.podios, 1);
     });
   });
 
