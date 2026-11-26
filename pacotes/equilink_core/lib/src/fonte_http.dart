@@ -67,14 +67,33 @@ class FonteHttp implements FonteDeDados {
   };
 
   /// Traduz o status HTTP em erro de domínio, para a interface reagir.
-  Never _recusar(int status, String acao) {
+  ///
+  /// Quando a API explica a recusa no campo `erro` do corpo (ex.: "A prova X
+  /// pertence a outro cavalo."), é esse o texto que chega ao operador. A
+  /// mensagem genérica, com método e status, fica para respostas sem
+  /// explicação legível.
+  Never _recusar(http.Response resposta, String acao) {
+    final status = resposta.statusCode;
+    final daApi = _mensagemDaApi(resposta);
     if (status == 401) {
-      throw ErroAutenticacao('Sessão expirada ou não iniciada.', status: status);
+      throw ErroAutenticacao(daApi ?? 'Sessão expirada ou não iniciada.', status: status);
     }
     if (status == 403) {
-      throw ErroPermissao('Seu perfil não permite $acao.', status: status);
+      throw ErroPermissao(daApi ?? 'Seu perfil não permite $acao.', status: status);
     }
-    throw ErroFonte('A API recusou $acao ($status).', status: status);
+    throw ErroFonte(daApi ?? 'A API recusou $acao ($status).', status: status);
+  }
+
+  /// O campo `erro` de uma resposta JSON da API, se houver um texto nele.
+  static String? _mensagemDaApi(http.Response resposta) {
+    try {
+      final corpo = jsonDecode(utf8.decode(resposta.bodyBytes));
+      final erro = corpo is Map ? corpo['erro'] : null;
+      if (erro is String && erro.trim().isNotEmpty) return erro.trim();
+    } on FormatException {
+      // Corpo vazio, HTML de proxy ou bytes inválidos: fica a mensagem genérica.
+    }
+    return null;
   }
 
   @override
@@ -82,7 +101,7 @@ class FonteHttp implements FonteDeDados {
     try {
       final resposta = await _cliente.get(_endpoint, headers: _cabecalhosPadrao).timeout(tempoLimite);
       if (resposta.statusCode != 200) {
-        _recusar(resposta.statusCode, 'carregar o acervo');
+        _recusar(resposta, 'carregar o acervo');
       }
       final corpo = jsonDecode(utf8.decode(resposta.bodyBytes)) as Map<String, dynamic>;
       return Acervo.fromJson(corpo);
@@ -101,7 +120,7 @@ class FonteHttp implements FonteDeDados {
           .timeout(tempoLimite);
       if (resposta.statusCode != 200 && resposta.statusCode != 201) {
         throw ErroFonte(
-          'A API recusou a gravação (${resposta.statusCode}).',
+          _mensagemDaApi(resposta) ?? 'A API recusou a gravação (${resposta.statusCode}).',
           status: resposta.statusCode,
         );
       }
@@ -128,7 +147,7 @@ class FonteHttp implements FonteDeDados {
           ? await _cliente.put(uri, headers: _cabecalhosPadrao, body: jsonEncode(corpo)).timeout(tempoLimite)
           : await _cliente.post(uri, headers: _cabecalhosPadrao, body: jsonEncode(corpo)).timeout(tempoLimite);
       if (resposta.statusCode >= 400) {
-        _recusar(resposta.statusCode, '$metodo $caminho');
+        _recusar(resposta, '$metodo $caminho');
       }
     } on ErroFonte {
       rethrow;
@@ -141,7 +160,7 @@ class FonteHttp implements FonteDeDados {
     try {
       final resposta = await _cliente.delete(_rota(caminho), headers: _cabecalhosPadrao).timeout(tempoLimite);
       if (resposta.statusCode >= 400 && resposta.statusCode != 404) {
-        _recusar(resposta.statusCode, 'remover $caminho');
+        _recusar(resposta, 'remover $caminho');
       }
     } on ErroFonte {
       rethrow;
@@ -202,7 +221,7 @@ class FonteHttp implements FonteDeDados {
           .get(_rota('/cavalos/${Uri.encodeComponent(cavaloId)}/provas/sgp'), headers: _cabecalhosPadrao)
           .timeout(tempoLimite);
       if (resposta.statusCode == 401 || resposta.statusCode == 403) {
-        _recusar(resposta.statusCode, 'importar do SGP');
+        _recusar(resposta, 'importar do SGP');
       }
       final corpo = jsonDecode(utf8.decode(resposta.bodyBytes));
       if (resposta.statusCode != 200) {
@@ -241,7 +260,7 @@ class FonteHttp implements FonteDeDados {
           .timeout(tempoLimite);
 
       if (resposta.statusCode != 201) {
-        if (resposta.statusCode >= 400) _recusar(resposta.statusCode, 'enviar a mídia');
+        if (resposta.statusCode >= 400) _recusar(resposta, 'enviar a mídia');
         throw ErroFonte(
           'A API respondeu ${resposta.statusCode} ao enviar a mídia.',
           status: resposta.statusCode,
