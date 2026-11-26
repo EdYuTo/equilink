@@ -6,6 +6,7 @@ import '../core/escopo.dart';
 import '../core/tema.dart';
 import '../rotas.dart';
 import '../widgets/comuns.dart';
+import '../widgets/imagem.dart';
 
 /// Lista de animais do acervo, com busca e ações de criar, duplicar e remover.
 class TelaCavalos extends StatefulWidget {
@@ -135,10 +136,9 @@ class _CartaoCavalo extends StatelessWidget {
             child: SizedBox(
               width: 52,
               height: 52,
-              child: Image.asset(
+              child: ImagemAcervo(
                 cavalo.fotoPerfil,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const ColoredBox(
+                semImagem: const ColoredBox(
                   color: AdminCores.superficieSuave,
                   child: Icon(Icons.pets, color: AdminCores.textoSecundario),
                 ),

@@ -7,6 +7,7 @@ import 'package:equilink_core/equilink_core.dart';
 import '../core/escopo.dart';
 import '../core/tema.dart';
 import '../widgets/comuns.dart';
+import '../widgets/imagem.dart';
 
 // -----------------------------------------------------------------------------
 // Ficha do animal
@@ -59,12 +60,9 @@ class AbaFicha extends StatelessWidget {
                   SizedBox(width: 160, child: Campo(rotulo: 'Raça', valor: cavalo.raca)),
                   SizedBox(width: 110, child: Campo(rotulo: 'Altura', valor: cavalo.altura)),
                   SizedBox(width: 110, child: Campo(rotulo: 'Peso', valor: cavalo.peso)),
-                  SizedBox(
-                    width: 170,
-                    child: Campo(
-                      rotulo: 'Foto de perfil',
-                      valor: cavalo.fotoPerfil.isEmpty ? '—' : cavalo.fotoPerfil,
-                    ),
+                  _FotoPerfil(
+                    cavalo: cavalo,
+                    aoTrocar: () => _trocarFotoPerfil(context, rep, cavalo),
                   ),
                 ],
               ),
@@ -130,6 +128,44 @@ class AbaFicha extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// Escolhe uma imagem, envia como mídia e grava a URL como foto de perfil.
+  ///
+  /// Antes só o assistente de cadastro definia a foto de perfil: se o envio
+  /// falhasse ali, não havia como corrigir sem recriar o animal.
+  Future<void> _trocarFotoPerfil(BuildContext context, Repositorio rep, Cavalo cavalo) async {
+    final mensageiro = ScaffoldMessenger.of(context);
+    void avisar(String texto) => mensageiro.showSnackBar(SnackBar(content: Text(texto)));
+
+    final escolhido = await FilePicker.pickFile(
+      dialogTitle: 'Escolher foto de perfil',
+      type: FileType.custom,
+      allowedExtensions: tiposImagemAceitos.keys.toList(),
+    );
+    if (escolhido == null) return;
+
+    final extensao = (escolhido.extension ?? '').toLowerCase();
+    final tipo = tiposImagemAceitos[extensao];
+    if (tipo == null) {
+      avisar('Extensão .$extensao não é aceita. Use JPG, PNG, WebP, AVIF ou GIF.');
+      return;
+    }
+
+    final url = await rep.enviarMidia(
+      cavalo.id,
+      bytes: await escolhido.readAsBytes(),
+      tipoConteudo: tipo,
+      nomeArquivo: escolhido.name,
+    );
+    if (url == null) {
+      avisar(rep.erro ?? 'Não foi possível enviar a foto.');
+      return;
+    }
+    // Relê o cavalo: outra edição pode ter sido gravada durante o envio.
+    final atual = rep.cavaloPorId(cavalo.id) ?? cavalo;
+    final ok = await rep.salvarCavalo(atual.copiarCom(fotoPerfil: url));
+    avisar(ok ? 'Foto de perfil atualizada.' : rep.erro ?? 'Não foi possível gravar a foto de perfil.');
   }
 
   Future<void> _editarIdentificacao(BuildContext context, Repositorio rep, Cavalo cavalo) async {
@@ -308,6 +344,59 @@ class AbaFicha extends StatelessWidget {
     );
     if (salvar != true) return;
     await rep.atualizarDescricao(cavalo.id, texto.text.trim());
+  }
+}
+
+/// Miniatura da foto de perfil com a ação de trocá-la.
+class _FotoPerfil extends StatelessWidget {
+  const _FotoPerfil({required this.cavalo, required this.aoTrocar});
+
+  final Cavalo cavalo;
+  final VoidCallback aoTrocar;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'FOTO DE PERFIL',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+            color: AdminCores.textoSecundario,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AdminRaios.pequeno),
+              child: SizedBox(
+                width: 56,
+                height: 56,
+                child: ImagemAcervo(
+                  cavalo.fotoPerfil,
+                  semImagem: const ColoredBox(
+                    color: AdminCores.superficieSuave,
+                    child: Icon(Icons.pets, color: AdminCores.textoSecundario),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            TextButton.icon(
+              onPressed: aoTrocar,
+              icon: const Icon(Icons.photo_camera_outlined, size: 15),
+              label: const Text('Trocar foto de perfil'),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 
@@ -1992,15 +2081,14 @@ String _dataHora(DateTime d) => '${_data(d)} às ${d.hour.toString().padLeft(2, 
 
 /// Miniatura de uma mídia no painel.
 ///
-/// Aceita tanto `assets/...` (acervo de demonstração) quanto a URL do R2 que o
-/// upload devolve. Sem isso o cartão mostrava apenas o caminho do arquivo.
+/// Desenha a URL do R2 e o `data:` da fonte de demonstração; os `assets/...`
+/// do acervo semente ficam no ícone (ver [ImagemAcervo]).
 class _MiniaturaMidia extends StatelessWidget {
   const _MiniaturaMidia({required this.midia});
 
   final Midia midia;
 
-  bool get _remota =>
-      midia.arquivo.startsWith('http://') || midia.arquivo.startsWith('https://');
+  bool get _remota => ImagemAcervo.remota(midia.arquivo);
 
   @override
   Widget build(BuildContext context) {
@@ -2008,19 +2096,7 @@ class _MiniaturaMidia extends StatelessWidget {
         ? (midia.poster ?? MidiaPadrao.capaVideo)
         : midia.arquivo;
 
-    final imagem = capa.startsWith('http')
-        ? Image.network(
-            capa,
-            fit: BoxFit.cover,
-            errorBuilder: (context, erro, pilha) => const _SemMiniatura(),
-            loadingBuilder: (context, filho, progresso) =>
-                progresso == null ? filho : const _SemMiniatura(),
-          )
-        : Image.asset(
-            capa,
-            fit: BoxFit.cover,
-            errorBuilder: (context, erro, pilha) => const _SemMiniatura(),
-          );
+    final imagem = ImagemAcervo(capa, semImagem: const _SemMiniatura());
 
     return Stack(
       fit: StackFit.expand,

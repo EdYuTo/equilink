@@ -9,6 +9,7 @@ import '../core/escopo.dart';
 import '../core/tema.dart';
 import '../rotas.dart';
 import '../widgets/comuns.dart';
+import '../widgets/imagem.dart';
 
 /// Cadastro completo de um cavalo, em passos.
 ///
@@ -103,26 +104,16 @@ class _TelaNovoCavaloState extends State<TelaNovoCavalo> {
   bool get _identificacaoValida =>
       _nome.text.trim().isNotEmpty && _registro.text.trim().isNotEmpty;
 
-  /// Tipos aceitos pela API; a mesma lista vive em `TIPOS_MIDIA` no Worker.
-  static const _tiposAceitos = {
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'png': 'image/png',
-    'webp': 'image/webp',
-    'avif': 'image/avif',
-    'gif': 'image/gif',
-  };
-
   Future<void> _escolherFoto() async {
     final escolhido = await FilePicker.pickFile(
       dialogTitle: 'Escolher foto de perfil',
       type: FileType.custom,
-      allowedExtensions: _tiposAceitos.keys.toList(),
+      allowedExtensions: tiposImagemAceitos.keys.toList(),
     );
     if (escolhido == null) return;
 
     final extensao = (escolhido.extension ?? '').toLowerCase();
-    final tipo = _tiposAceitos[extensao];
+    final tipo = tiposImagemAceitos[extensao];
     if (tipo == null) {
       setState(() => _erroFoto = 'Extensão .$extensao não é aceita.');
       return;
