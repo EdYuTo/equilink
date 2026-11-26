@@ -93,7 +93,7 @@ class _TelaPerfilState extends State<TelaPerfil> {
             tooltip: 'Compartilhar perfil',
             icon: const Icon(Icons.ios_share),
             onPressed: () =>
-                CompartilhamentoPerfil.compartilhar(context, repositorio),
+                CompartilhamentoPerfil.compartilhar(context, repositorio, origem: 'perfil'),
           ),
         ],
       ),

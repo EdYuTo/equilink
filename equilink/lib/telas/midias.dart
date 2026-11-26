@@ -44,7 +44,7 @@ class _TelaMidiasState extends State<TelaMidias> {
             tooltip: 'Compartilhar galeria',
             icon: const Icon(Icons.ios_share),
             onPressed: () =>
-                CompartilhamentoPerfil.compartilhar(context, repositorio),
+                CompartilhamentoPerfil.compartilhar(context, repositorio, origem: 'galeria'),
           ),
         ],
       ),

@@ -35,15 +35,28 @@ class ContextoPerfil {
 }
 
 abstract final class CompartilhamentoPerfil {
-  static Future<void> compartilhar(BuildContext context, Repositorio repositorio) async {
+  /// Abre o compartilhamento do sistema e registra o evento
+  /// `perfil_compartilhado`. [origem] diz de onde veio o toque (`perfil`,
+  /// `galeria`).
+  static Future<void> compartilhar(
+    BuildContext context,
+    Repositorio repositorio, {
+    required String origem,
+  }) async {
     final cavalo = repositorio.cavaloObrigatorio;
     final texto = IdentidadeCavalo.texto(cavalo);
-    await SharePlus.instance.share(
+    final resultado = await SharePlus.instance.share(
       ShareParams(
         text: texto,
         subject: 'Perfil de ${cavalo.nome}',
         sharePositionOrigin: _origem(context),
       ),
+    );
+    repositorio.analytics.registrar(
+      'perfil_compartilhado',
+      entidade: 'cavalo',
+      entidadeId: cavalo.id,
+      propriedades: {'origem': origem, 'status': resultado.status.name},
     );
   }
 
