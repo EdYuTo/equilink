@@ -731,9 +731,12 @@ class _LinhaParentesco extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              // Registro como foi gravado, igual à aba Genealogia: um pai
+              // importado tem registro AQHA, não ABQM.
               Text(
-                'ABQM ${ancestral.registro.replaceAll(RegExp(r'^(ABQM|AQHA) '), '')}'
-                '${ancestral.pelagem != null ? ' • ${ancestral.pelagem}' : ''}',
+                [ancestral.registro.trim(), ?ancestral.pelagem]
+                    .where((parte) => parte.isNotEmpty)
+                    .join(' • '),
                 style: const TextStyle(
                   fontSize: 12,
                   color: Cores.textoSecundario,
