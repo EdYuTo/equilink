@@ -172,6 +172,55 @@ class FonteHttp implements FonteDeDados {
   );
 
   @override
+  Future<void> removerProva(String cavaloId, String provaId) => _remover(
+    '/cavalos/${Uri.encodeComponent(cavaloId)}/provas/${Uri.encodeComponent(provaId)}',
+  );
+
+  @override
+  Future<void> removerMidia(String cavaloId, String midiaId) => _remover(
+    '/cavalos/${Uri.encodeComponent(cavaloId)}/midias/${Uri.encodeComponent(midiaId)}',
+  );
+
+  /// Tamanho máximo de um lote de provas aceito pela API.
+  static const loteProvas = 500;
+
+  @override
+  Future<void> salvarProvas(String cavaloId, List<Prova> provas) async {
+    final caminho = '/cavalos/${Uri.encodeComponent(cavaloId)}/provas';
+    for (var i = 0; i < provas.length; i += loteProvas) {
+      final fim = i + loteProvas < provas.length ? i + loteProvas : provas.length;
+      await _enviarCorpo('POST', caminho, {
+        'provas': [for (final p in provas.sublist(i, fim)) p.toJson()],
+      });
+    }
+  }
+
+  @override
+  Future<ResultadoSgp> buscarProvasSgp(String cavaloId) async {
+    try {
+      final resposta = await _cliente
+          .get(_rota('/cavalos/${Uri.encodeComponent(cavaloId)}/provas/sgp'), headers: _cabecalhosPadrao)
+          .timeout(tempoLimite);
+      if (resposta.statusCode == 401 || resposta.statusCode == 403) {
+        _recusar(resposta.statusCode, 'importar do SGP');
+      }
+      final corpo = jsonDecode(utf8.decode(resposta.bodyBytes));
+      if (resposta.statusCode != 200) {
+        final mensagem = corpo is Map && corpo['erro'] is String ? corpo['erro'] as String : null;
+        throw ErroFonte(
+          mensagem ?? 'A API recusou a consulta ao SGP (${resposta.statusCode}).',
+          status: resposta.statusCode,
+        );
+      }
+      return ResultadoSgp.fromJson(corpo as Map<String, dynamic>);
+    } on ErroFonte {
+      rethrow;
+    } catch (erro) {
+      throw ErroFonte('Não foi possível consultar o SGP.', causa: erro);
+    }
+  }
+
+  @override
   Future<String> enviarMidia(
     String cavaloId, {
     required List<int> bytes,

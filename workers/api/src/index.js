@@ -15,6 +15,10 @@
 //   PUT    /baias/:numero                       -> grava uma baia
 //   DELETE /baias/:numero                       -> remove uma baia
 //   PUT    /cavalos/:id/provas/:provaId         -> grava uma prova
+//   DELETE /cavalos/:id/provas/:provaId         -> remove uma prova
+//   DELETE /cavalos/:id/midias/:midiaId         -> remove uma mídia (e o arquivo no R2)
+//   POST   /cavalos/:id/provas                  -> grava um lote de provas
+//   GET    /cavalos/:id/provas/sgp              -> passadas do cavalo no SGP (prévia)
 //   PUT    /cavalos/:id/midias/:midiaId         -> grava uma mídia
 //   POST   /cavalos/:id/principal               -> define o destaque do app
 //   POST   /eventos                             -> recebe lote de analytics
@@ -27,6 +31,8 @@
 
 import { neon } from '@neondatabase/serverless';
 import { normalizarAncestral } from './genealogia.js';
+import { ErroSgp, provasDoSgp } from './sgp.js';
+import { gravarCavalo, gravarMidia, gravarProva, gravarProvasEmLote } from './gravacao.js';
 import { ErroValidacao, objeto, texto } from './validacao.js';
 import {
   acessoDe,
@@ -36,9 +42,10 @@ import {
   derivarHash,
   emitirSessao,
   gerarSalt,
+  hashIp as hashDoIp,
   identificar,
   INATIVIDADE_MAXIMA,
-  paraHex,
+  cookieRenovado,
   segundosAteExpirar,
 } from './auth.js';
 
@@ -327,65 +334,6 @@ async function lerAcervo(sql, harasId, { privado = false } = {}) {
 // Escrita
 // ---------------------------------------------------------------------------
 
-async function gravarCavalo(sql, harasId, c) {
-  await sql`
-    insert into cavalos (id, haras_id, nome, registro, sexo, nascimento, pelagem, raca,
-                         altura, peso, descricao, foto_perfil, principal, proprietario,
-                         criador, pai, mae, sgpe_url, atualizado_em)
-    values (${c.id}, ${harasId}, ${c.nome}, ${c.registro}, ${c.sexo}, ${c.nascimento},
-            ${c.pelagem ?? ''}, ${c.raca ?? 'EquiLink'}, ${c.altura ?? ''},
-            ${c.peso ?? ''}, ${c.descricao ?? ''}, ${c.fotoPerfil ?? ''},
-            ${c.principal ?? false}, ${JSON.stringify(c.proprietario ?? {})}::jsonb,
-            ${JSON.stringify(c.criador ?? {})}::jsonb, ${JSON.stringify(c.pai ?? {})}::jsonb,
-            ${JSON.stringify(c.mae ?? {})}::jsonb, ${c.sgpeUrl ?? null}, now())
-    on conflict (id) do update set
-      nome = excluded.nome, registro = excluded.registro, sexo = excluded.sexo,
-      nascimento = excluded.nascimento, pelagem = excluded.pelagem, raca = excluded.raca,
-      altura = excluded.altura, peso = excluded.peso, descricao = excluded.descricao,
-      foto_perfil = excluded.foto_perfil, principal = excluded.principal,
-      proprietario = excluded.proprietario, criador = excluded.criador,
-      pai = excluded.pai, mae = excluded.mae,
-      -- Os clientes não conhecem este campo: sem valor novo, o atual fica.
-      sgpe_url = coalesce(excluded.sgpe_url, cavalos.sgpe_url),
-      atualizado_em = now()
-  `;
-
-  // Provas e mídias vêm aninhadas no cavalo pelo contrato do app; gravar o
-  // cavalo precisa persistir também esses filhos.
-  for (const p of c.provas ?? []) {
-    await gravarProva(sql, c.id, p);
-  }
-  for (const m of c.midias ?? []) {
-    await gravarMidia(sql, c.id, m);
-  }
-}
-
-async function gravarProva(sql, cavaloId, p) {
-  await sql`
-    insert into provas (id, cavalo_id, data, nome, local, categoria, colocacao,
-                        tempo_seg, inscritos, premiacao, fonte)
-    values (${p.id}, ${cavaloId}, ${p.data}, ${p.nome}, ${p.local ?? ''},
-            ${p.categoria ?? ''}, ${p.colocacao ?? 0}, ${p.tempoSegundos ?? 0},
-            ${p.inscritos ?? 0}, ${p.premiacao ?? null}, ${p.fonte ?? null})
-    on conflict (id) do update set
-      data = excluded.data, nome = excluded.nome, local = excluded.local,
-      categoria = excluded.categoria, colocacao = excluded.colocacao,
-      tempo_seg = excluded.tempo_seg, inscritos = excluded.inscritos,
-      premiacao = excluded.premiacao, fonte = coalesce(excluded.fonte, provas.fonte)
-  `;
-}
-
-async function gravarMidia(sql, cavaloId, m) {
-  await sql`
-    insert into midias (id, cavalo_id, tipo, arquivo, legenda, local, poster, duracao_seg)
-    values (${m.id}, ${cavaloId}, ${m.tipo}, ${m.arquivo}, ${m.legenda ?? ''},
-            ${m.local ?? null}, ${m.poster ?? null}, ${m.duracaoSegundos ?? null})
-    on conflict (id) do update set
-      tipo = excluded.tipo, arquivo = excluded.arquivo, legenda = excluded.legenda,
-      local = excluded.local, poster = excluded.poster, duracao_seg = excluded.duracao_seg
-  `;
-}
-
 /**
  * Ids de tarefa/ocorrência/observação se repetem entre baias no modelo do app,
  * e a chave primária aqui é global. Prefixa de forma determinística — checar
@@ -494,9 +442,12 @@ async function gravarAcervoEmLote(sql, harasId, acervo) {
       -- Os clientes não conhecem este campo: sem valor novo, o atual fica.
       sgpe_url = coalesce(excluded.sgpe_url, cavalos.sgpe_url),
       atualizado_em = now()
+    -- Id de cavalo de outro haras: não toca (EQL-041).
+    where cavalos.haras_id = excluded.haras_id
   `;
 
-  // Provas e mídias de todos os cavalos.
+  // Provas e mídias de todos os cavalos. Só entram as de cavalos deste haras,
+  // e uma linha existente só muda se já for do mesmo cavalo (EQL-041).
   const provas = [];
   const midias = [];
   for (const c of cavalos) {
@@ -523,10 +474,12 @@ async function gravarAcervoEmLote(sql, harasId, acervo) {
         ${provas.map((p) => p.premiacao ?? null)}::text[],
         ${provas.map((p) => p.fonte ?? null)}::text[]
       ) as d(id, cavalo_id, data, nome, local, categoria, colocacao, tempo_seg, inscritos, premiacao, fonte)
+      where exists (select 1 from cavalos c where c.id = d.cavalo_id and c.haras_id = ${harasId})
       on conflict (id) do update set
         colocacao = excluded.colocacao, tempo_seg = excluded.tempo_seg,
         inscritos = excluded.inscritos, premiacao = excluded.premiacao,
         fonte = coalesce(excluded.fonte, provas.fonte)
+      where provas.cavalo_id = excluded.cavalo_id
     `;
   }
 
@@ -544,8 +497,10 @@ async function gravarAcervoEmLote(sql, harasId, acervo) {
         ${midias.map((m) => m.poster ?? null)}::text[],
         ${midias.map((m) => m.duracaoSegundos ?? null)}::text[]
       ) as d(id, cavalo_id, tipo, arquivo, legenda, local, poster, duracao_seg)
+      where exists (select 1 from cavalos c where c.id = d.cavalo_id and c.haras_id = ${harasId})
       on conflict (id) do update set
         arquivo = excluded.arquivo, legenda = excluded.legenda, poster = excluded.poster
+      where midias.cavalo_id = excluded.cavalo_id
     `;
   }
 
@@ -645,13 +600,16 @@ async function gravarBaiasEmLote(sql, harasId, baias) {
 // Sessão e bloqueio por tentativa repetida
 // ---------------------------------------------------------------------------
 
-/** Hash do IP: guarda o suficiente para bloquear, sem armazenar o endereço. */
+/**
+ * Hash do IP: guarda o suficiente para bloquear, sem armazenar o endereço nem
+ * segredo nenhum (EQL-001: antes era o hex de "ip:SESSION_SECRET").
+ */
 const hashIp = (request, env) => {
   const ip =
     request.headers.get('cf-connecting-ip') ??
     request.headers.get('x-forwarded-for') ??
     'desconhecido';
-  return paraHex(new TextEncoder().encode(`${ip}:${env.SESSION_SECRET ?? ''}`));
+  return hashDoIp(ip, env);
 };
 
 const JANELA_BLOQUEIO_MIN = 15;
@@ -692,7 +650,23 @@ const COOKIE_SEGURO = (request) => {
 };
 
 export default {
+  /**
+   * Toda resposta a uma sessão válida leva o cookie renovado, inclusive erros e
+   * `GET /sessao` (EQL-002). Antes o cookie renovado era calculado e descartado,
+   * e a sessão caía 1 h depois do login mesmo com o operador trabalhando.
+   */
   async fetch(request, env) {
+    const estado = { renovacao: null };
+    const resposta = await rotear(request, env, estado);
+    if (!estado.renovacao || resposta.headers.has('set-cookie')) return resposta;
+    // Resposta com cabeçalhos imutáveis vira cópia antes de ganhar o cookie.
+    const final = new Response(resposta.body, resposta);
+    final.headers.append('set-cookie', estado.renovacao);
+    return final;
+  },
+};
+
+async function rotear(request, env, estado) {
     const url = new URL(request.url);
     const base = cabecalhosBase(env, request);
 
@@ -725,7 +699,7 @@ export default {
           const corpo = await lerJson(request);
           const usuarioId = texto(corpo.usuario, 'usuario', { max: 120, obrigatorio: true });
           const senha = texto(corpo.senha, 'senha', { max: 200, obrigatorio: true });
-          const ipHash = hashIp(request, env);
+          const ipHash = await hashIp(request, env);
 
           if (await bloqueado(sql, ipHash, usuarioId)) {
             return erro(
@@ -777,6 +751,9 @@ export default {
         if (request.method === 'GET') {
           const identidade = await identificar(request, env);
           const acesso = await acessoDe(sql, identidade, env);
+          if (acesso && identidade.renovar) {
+            estado.renovacao = await cookieRenovado(identidade.renovar, env.SESSION_SECRET, { seguro });
+          }
           if (!acesso) return json({ autenticado: false }, 200, { cabecalhos: base });
           return json(
             {
@@ -807,23 +784,10 @@ export default {
       const podeRemover = autenticado && acesso.papel === 'proprietario';
 
       // Renova o relógio de inatividade quando houve uso desde a última
-      // assinatura. Sem isso, a sessão cairia 1h depois do login mesmo com o
-      // operador trabalhando.
-      const renovacao = identidade.renovar
-        ? {
-            'set-cookie': cookieDeSessao(
-              await emitirSessao(identidade.usuarioId, env.SESSION_SECRET),
-              { seguro },
-            ),
-          }
-        : {};
-
-      /** Resposta com o cookie renovado, quando aplicável. */
-      const responder = (corpo, status = 200, extras = {}) =>
-        json(corpo, status, {
-          cabecalhos: base,
-          headers: { ...renovacao, ...(extras.headers ?? {}) },
-        });
+      // assinatura; `fetch` põe o cookie na resposta, seja ela qual for.
+      if (autenticado && identidade.renovar) {
+        estado.renovacao = await cookieRenovado(identidade.renovar, env.SESSION_SECRET, { seguro });
+      }
 
       const recusarEscrita = () =>
         erro(
@@ -968,6 +932,62 @@ export default {
           return json({ ok: true }, 200, { cabecalhos: base });
         }
 
+        // DELETE /cavalos/:id/provas/:provaId e /midias/:midiaId (EQL-008).
+        // Antes não havia remoção: o app regravava o acervo inteiro, que só
+        // insere e atualiza, e o item removido voltava.
+        if (request.method === 'DELETE' && (partes[2] === 'provas' || partes[2] === 'midias') && partes[3] && !partes[4]) {
+          if (!podeRemover) return recusarEscrita();
+          const filhoId = identificador(decodeURIComponent(partes[3]), 'id');
+          if (!(await cavaloDoHaras(sql, id, acesso.harasId))) {
+            return erro('Cavalo não encontrado.', 404, { cabecalhos: base });
+          }
+          if (partes[2] === 'provas') {
+            const removidas = await sql`
+              delete from provas where id = ${filhoId} and cavalo_id = ${id} returning id
+            `;
+            if (!removidas.length) return erro('Prova não encontrada.', 404, { cabecalhos: base });
+          } else {
+            const removidas = await sql`
+              delete from midias where id = ${filhoId} and cavalo_id = ${id} returning arquivo
+            `;
+            if (!removidas.length) return erro('Mídia não encontrada.', 404, { cabecalhos: base });
+            await apagarArquivoDaMidia(sql, env, id, removidas[0].arquivo);
+          }
+          return json({ ok: true }, 200, { cabecalhos: base });
+        }
+
+        // POST /cavalos/:id/provas — lote, para importar o histórico de uma vez.
+        if (request.method === 'POST' && partes[2] === 'provas' && !partes[3]) {
+          if (!podeEscrever) return recusarEscrita();
+          if (!(await cavaloDoHaras(sql, id, acesso.harasId))) {
+            return erro('Cavalo não encontrado.', 404, { cabecalhos: base });
+          }
+          const corpo = objeto(await lerJson(request), 'corpo');
+          const provas = listaDe(corpo.provas, 'provas').map((p) => normalizarProva(p));
+          if (new Set(provas.map((p) => p.id)).size !== provas.length) {
+            throw new ErroValidacao('O lote tem provas com o mesmo id.');
+          }
+          const gravadas = await gravarProvasEmLote(sql, id, provas);
+          return json({ ok: true, gravadas, ignoradas: provas.length - gravadas }, 200, { cabecalhos: base });
+        }
+
+        // GET /cavalos/:id/provas/sgp — só lê o SGP e devolve a prévia; não grava.
+        // Exige permissão de escrita: é uma consulta a um site de terceiros.
+        if (request.method === 'GET' && partes[2] === 'provas' && partes[3] === 'sgp' && !partes[4]) {
+          if (!podeEscrever) return recusarEscrita();
+          const [cavalo] = await sql`
+            select nome, registro from cavalos where id = ${id} and haras_id = ${acesso.harasId}
+          `;
+          if (!cavalo) return erro('Cavalo não encontrado.', 404, { cabecalhos: base });
+          try {
+            return json(await provasDoSgp(cavalo), 200, { cabecalhos: base });
+          } catch (e) {
+            if (!(e instanceof ErroSgp)) throw e;
+            console.error('[sgp]', id, e.message);
+            return erro(`Não foi possível ler o SGP agora. ${e.message}`, 502, { cabecalhos: base });
+          }
+        }
+
         // POST /cavalos/:id/midias — recebe o arquivo e devolve a URL pública.
         //
         // O corpo é o binário cru (sem multipart): o cliente já sabe o tipo, e
@@ -1040,8 +1060,7 @@ export default {
         headers: { 'x-erro-id': idErro },
       });
     }
-  },
-};
+}
 
 // ---------------------------------------------------------------------------
 // Upload de mídia para o R2
@@ -1067,6 +1086,32 @@ const TIPOS_MIDIA = {
   'video/webm': 'webm',
   'video/quicktime': 'mov',
 };
+
+/**
+ * Apaga do R2 o arquivo de uma mídia removida, se for um que esta API enviou
+ * para este cavalo (`<R2_PUBLICO>/midia/<cavaloId>/...`) e nada mais o usa
+ * (outra mídia ou a foto de perfil de algum cavalo). Arquivo de outro lugar
+ * fica onde está. Falha ao apagar não desfaz a remoção: só loga.
+ */
+async function apagarArquivoDaMidia(sql, env, cavaloId, arquivo) {
+  if (!env.MIDIA || !env.R2_PUBLICO || typeof arquivo !== 'string') return;
+  const prefixo = `${env.R2_PUBLICO.replace(/\/$/, '')}/`;
+  if (!arquivo.startsWith(prefixo)) return;
+  const chave = arquivo.slice(prefixo.length);
+  if (!chave.startsWith(`midia/${cavaloId}/`) || chave.includes('..')) return;
+  const emUso = await sql`
+    select 1 from midias where arquivo = ${arquivo}
+    union all
+    select 1 from cavalos where foto_perfil = ${arquivo}
+    limit 1
+  `;
+  if (emUso.length) return;
+  try {
+    await env.MIDIA.delete(chave);
+  } catch (e) {
+    console.error('[midia] não apagou', chave, e?.message);
+  }
+}
 
 async function uploadMidia(request, env, base, cavaloId) {
   const tipo = (request.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();

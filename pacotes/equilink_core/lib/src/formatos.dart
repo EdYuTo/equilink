@@ -73,8 +73,8 @@ String tempoProva(double segundos) {
   return '$resto,$fracao';
 }
 
-/// `16,742s` — versão compacta para tabelas.
-String tempoProvaCompacto(double segundos) => '${tempoProva(segundos)}s';
+/// `16,742s` — versão compacta para tabelas. Sem tempo válido (zero): `—`.
+String tempoProvaCompacto(double segundos) => segundos > 0 ? '${tempoProva(segundos)}s' : '—';
 
 /// `1,52 m`
 String metros(double valor) => '${valor.toStringAsFixed(2).replaceAll('.', ',')} m';

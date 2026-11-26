@@ -165,6 +165,9 @@ class Repositorio extends ChangeNotifier {
       analytics.erro('gravacao_recusada', _erro!, propriedades: {'evento': evento ?? '—'});
       return false;
     }
+    // Guarda o estado anterior: se a fonte recusar, a tela volta ao que era
+    // em vez de mostrar como feito o que não foi (EQL-013).
+    final anterior = _acervo;
     _acervo = transformacao(_acervo);
     _erro = null;
     notifyListeners();
@@ -186,11 +189,13 @@ class Repositorio extends ChangeNotifier {
       notifyListeners();
       return true;
     } on ErroFonte catch (e) {
+      _acervo = anterior;
       _erro = e.mensagem;
       analytics.erro('gravar_acervo', e.mensagem, propriedades: {'evento': evento ?? '—'});
       notifyListeners();
       return false;
     } catch (e) {
+      _acervo = anterior;
       _erro = 'Falha inesperada ao gravar: $e';
       analytics.erro('gravar_acervo', '$e', propriedades: {'evento': evento ?? '—'});
       notifyListeners();
@@ -303,14 +308,18 @@ class Repositorio extends ChangeNotifier {
   }
 
   /// Desempenho agrupado por mês (gráfico do histórico esportivo).
+  ///
+  /// Só meses com passada cronometrada, e no máximo os 12 mais recentes: um
+  /// histórico importado tem anos de provas, e o gráfico não cabe.
   List<({String rotulo, int provas, int vitorias, double melhorTempo})> desempenhoPorMes() {
     final alvo = cavalo;
     if (alvo == null) return const [];
     final mapa = <String, List<Prova>>{};
-    for (final p in alvo.provas) {
+    for (final p in alvo.provas.where((p) => p.temTempo)) {
       mapa.putIfAbsent('${p.data.year}-${p.data.month.toString().padLeft(2, '0')}', () => []).add(p);
     }
-    final chaves = mapa.keys.toList()..sort();
+    final todas = mapa.keys.toList()..sort();
+    final chaves = todas.length > 12 ? todas.sublist(todas.length - 12) : todas;
     return [
       for (final k in chaves)
         (
@@ -381,6 +390,8 @@ class Repositorio extends ChangeNotifier {
     gravar: (_) => fonte.definirPrincipal(id),
   );
 
+  /// Grava só o cavalo editado. Antes caía no `salvar` do acervo inteiro, que
+  /// regravava o haras todo a partir de uma cópia talvez velha (EQL-008/014).
   Future<bool> atualizarDescricao(String id, String texto) => _aplicar(
     (a) => a.copiarCom(
       cavalos: [for (final c in a.cavalos) if (c.id == id) c.copiarCom(descricao: texto) else c],
@@ -388,6 +399,10 @@ class Repositorio extends ChangeNotifier {
     evento: 'descricao_editada',
     entidade: 'cavalo',
     entidadeId: id,
+    gravar: (a) async {
+      final cavalo = a.cavaloPorId(id);
+      if (cavalo != null) await fonte.salvarCavalo(cavalo);
+    },
     propriedades: {'caracteres': texto.length},
   );
 
@@ -430,11 +445,58 @@ class Repositorio extends ChangeNotifier {
     );
   }
 
+  /// Lê no SGP as passadas do cavalo, sem gravar nada. Nulo em caso de falha,
+  /// com a explicação em [erro].
+  Future<ResultadoSgp?> buscarProvasSgp(String cavaloId) async {
+    _erro = null;
+    notifyListeners();
+    try {
+      return await fonte.buscarProvasSgp(cavaloId);
+    } on ErroFonte catch (e) {
+      _erro = e.mensagem;
+    } catch (e) {
+      _erro = 'Falha inesperada ao consultar o SGP: $e';
+    }
+    analytics.erro('buscar_sgp', _erro!, propriedades: {'cavaloId': cavaloId});
+    notifyListeners();
+    return null;
+  }
+
+  /// Grava de uma vez as provas escolhidas na importação: novas entram, as de
+  /// mesmo id são atualizadas.
+  Future<bool> importarProvas(String cavaloId, List<Prova> provas) {
+    final porId = {for (final p in provas) p.id: p};
+    return _aplicar(
+      (a) => a.copiarCom(
+        cavalos: [
+          for (final c in a.cavalos)
+            if (c.id == cavaloId)
+              c.copiarCom(
+                provas: [
+                  for (final p in c.provas) porId.remove(p.id) ?? p,
+                  ...porId.values,
+                ],
+              )
+            else
+              c,
+        ],
+      ),
+      evento: 'provas_importadas',
+      entidade: 'cavalo',
+      entidadeId: cavaloId,
+      gravar: (_) => fonte.salvarProvas(cavaloId, provas),
+      valor: provas.length,
+      propriedades: {'cavaloId': cavaloId, 'origem': provas.firstOrNull?.fonte ?? '—'},
+    );
+  }
+
   Future<bool> removerProva(String cavaloId, String provaId) => _aplicar(
     evento: 'prova_removida',
     entidade: 'prova',
     entidadeId: provaId,
     propriedades: {'cavaloId': cavaloId},
+    // Remoção de verdade (EQL-008): o `salvar` do acervo só insere e atualiza.
+    gravar: (_) => fonte.removerProva(cavaloId, provaId),
     (a) => a.copiarCom(
       cavalos: [
         for (final c in a.cavalos)
@@ -514,6 +576,7 @@ class Repositorio extends ChangeNotifier {
     entidade: 'midia',
     entidadeId: midiaId,
     propriedades: {'cavaloId': cavaloId},
+    gravar: (_) => fonte.removerMidia(cavaloId, midiaId),
     (a) => a.copiarCom(
       cavalos: [
         for (final c in a.cavalos)

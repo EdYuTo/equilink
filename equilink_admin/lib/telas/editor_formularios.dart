@@ -575,14 +575,20 @@ class AbaProvas extends StatelessWidget {
             titulo: 'Provas',
             subtitulo: provas.isEmpty
                 ? 'Nenhuma prova registrada'
-                : '${provas.length} provas • ${cavalo.vitorias} vitórias • '
-                      'melhor tempo ${cavalo.melhorTempo!.toStringAsFixed(3).replaceAll('.', ',')}s',
+                : '${provas.length} provas • ${cavalo.vitorias} vitórias'
+                      '${cavalo.melhorTempo == null ? '' : ' • melhor tempo ${tempoProvaCompacto(cavalo.melhorTempo!)}'}',
             icone: Icons.emoji_events_outlined,
             acao: FilledButton.icon(
               onPressed: () => _editar(context, null),
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Nova prova'),
             ),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => _importarSgp(context),
+            icon: const Icon(Icons.cloud_download_outlined, size: 16),
+            label: const Text('Importar do SGP'),
           ),
           const SizedBox(height: 16),
           if (provas.isEmpty)
@@ -634,9 +640,13 @@ class AbaProvas extends StatelessWidget {
                             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                           ),
                           Text(
-                            '${_data(prova.data)} • ${prova.local} • '
-                            '${prova.tempoSegundos.toStringAsFixed(3).replaceAll('.', ',')}s • '
-                            '${prova.inscritos} inscritos',
+                            [
+                              _data(prova.data),
+                              if (prova.local.isNotEmpty) prova.local,
+                              tempoProvaCompacto(prova.tempoSegundos),
+                              if (prova.inscritos > 0) '${prova.inscritos} inscritos',
+                              if (prova.fonte != null) prova.fonte!,
+                            ].join(' • '),
                             style: const TextStyle(
                               fontSize: 11.5,
                               color: AdminCores.textoSecundario,
@@ -771,6 +781,27 @@ class AbaProvas extends StatelessWidget {
     }
   }
 
+  /// Busca as passadas no SGP, mostra a prévia e só grava se a pessoa confirmar.
+  Future<void> _importarSgp(BuildContext context) async {
+    final rep = AdminEscopo.de(context);
+    final importar = await showDialog<List<Prova>>(
+      context: context,
+      builder: (context) => _DialogoImportacaoSgp(cavalo: cavalo, busca: rep.buscarProvasSgp(cavalo.id), erro: () => rep.erro),
+    );
+    if (importar == null || importar.isEmpty || !context.mounted) return;
+    final ok = await rep.importarProvas(cavalo.id, importar);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? '${importar.length} provas importadas do SGP.'
+              : rep.erro ?? 'Não foi possível gravar as provas importadas.',
+        ),
+      ),
+    );
+  }
+
   Future<void> _remover(BuildContext context, Prova prova) async {
     final rep = AdminEscopo.de(context);
     final confirmar = await showDialog<bool>(
@@ -789,7 +820,162 @@ class AbaProvas extends StatelessWidget {
       ),
     );
     if (confirmar != true) return;
-    await rep.removerProva(cavalo.id, prova.id);
+    final ok = await rep.removerProva(cavalo.id, prova.id);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(rep.erro ?? 'Não foi possível remover a prova.')),
+      );
+    }
+  }
+}
+
+/// Prévia da importação do SGP.
+///
+/// Passadas que já parecem cadastradas à mão (mesmo tempo, até 7 dias de
+/// diferença: o SGP data o evento pelo último dia) ficam de fora, para o
+/// histórico não contar a mesma passada duas vezes.
+class _DialogoImportacaoSgp extends StatelessWidget {
+  const _DialogoImportacaoSgp({required this.cavalo, required this.busca, required this.erro});
+
+  final Cavalo cavalo;
+  final Future<ResultadoSgp?> busca;
+  final String? Function() erro;
+
+  static bool repetidaManual(Prova nova, Iterable<Prova> existentes) => existentes.any(
+    (p) =>
+        p.fonte != 'SGP' &&
+        p.temTempo &&
+        (p.tempoSegundos - nova.tempoSegundos).abs() < 0.0005 &&
+        p.data.difference(nova.data).inDays.abs() <= 7,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<ResultadoSgp?>(
+      future: busca,
+      builder: (context, estado) {
+        if (estado.connectionState != ConnectionState.done) {
+          return const AlertDialog(
+            title: Text('Importar do SGP'),
+            content: Row(
+              children: [
+                SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(width: 14),
+                Expanded(child: Text('Procurando o cavalo no SGP…')),
+              ],
+            ),
+          );
+        }
+        final r = estado.data;
+        if (r == null || !r.encontrado) {
+          return AlertDialog(
+            title: const Text('Importar do SGP'),
+            content: Text(
+              r == null
+                  ? erro() ?? 'Não foi possível consultar o SGP.'
+                  : '${r.motivo ?? 'Cavalo não encontrado no SGP.'}\n\n'
+                        'A busca usa o nome e o registro da ficha: "${cavalo.nome}", ${cavalo.registro}.',
+            ),
+            actions: [
+              FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Fechar')),
+            ],
+          );
+        }
+        final ids = {for (final p in cavalo.provas) p.id};
+        final repetidas = r.provas.where((p) => !ids.contains(p.id) && repetidaManual(p, cavalo.provas)).toList();
+        final importar = r.provas.where((p) => !repetidas.contains(p)).toList();
+        final novas = importar.where((p) => !ids.contains(p.id)).length;
+        final atualizadas = importar.length - novas;
+        final semTempo = importar.where((p) => !p.temTempo).length;
+
+        return AlertDialog(
+          title: const Text('Importar do SGP'),
+          content: SizedBox(
+            width: 560,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  r.provas.isEmpty
+                      ? 'O SGP não tem passadas deste cavalo.'
+                      : '${r.provas.length} passadas no SGP: $novas novas'
+                            '${atualizadas > 0 ? ', $atualizadas já importadas (serão atualizadas)' : ''}'
+                            '${repetidas.isNotEmpty ? ', ${repetidas.length} parecem já cadastradas à mão e ficam de fora' : ''}.',
+                  style: const TextStyle(fontSize: 13),
+                ),
+                if (semTempo > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      '$semTempo sem tempo válido (SAT no SGP) entram sem tempo e não contam na média.',
+                      style: const TextStyle(fontSize: 12, color: AdminCores.textoSecundario),
+                    ),
+                  ),
+                if (r.url != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: SelectableText(
+                      r.url!,
+                      style: const TextStyle(fontSize: 11.5, color: AdminCores.textoSecundario),
+                    ),
+                  ),
+                if (importar.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 320),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: importar.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final p = importar[i];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 34,
+                                child: Text(
+                                  colocacao(p.colocacao),
+                                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(p.nome, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                                    Text(
+                                      '${_data(p.data)} • ${p.categoria} • ${tempoProvaCompacto(p.tempoSegundos)}'
+                                      '${ids.contains(p.id) ? ' • já importada' : ''}',
+                                      style: const TextStyle(fontSize: 11.5, color: AdminCores.textoSecundario),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+            if (importar.isNotEmpty)
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(importar),
+                child: Text('Importar ${importar.length}'),
+              ),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -1162,7 +1348,12 @@ class AbaMidias extends StatelessWidget {
       ),
     );
     if (confirmar != true) return;
-    await rep.removerMidia(cavalo.id, midia.id);
+    final ok = await rep.removerMidia(cavalo.id, midia.id);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(rep.erro ?? 'Não foi possível remover a mídia.')),
+      );
+    }
   }
 }
 

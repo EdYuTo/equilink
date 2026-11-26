@@ -32,7 +32,7 @@ create table if not exists credenciais (
 -- ---------------------------------------------------------------------------
 
 create table if not exists tentativas_login (
-  ip_hash    text not null,             -- sha256(ip + segredo), sem o IP em claro
+  ip_hash    text not null,             -- HMAC-SHA256 do IP com chave própria (hashIp), de mão única
   usuario_id text not null default '',
   quando     timestamptz not null default now(),
   sucesso    boolean not null default false

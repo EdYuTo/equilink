@@ -137,6 +137,18 @@ abstract interface class FonteDeDados {
   /// Insere ou atualiza uma prova de um cavalo.
   Future<void> salvarProva(String cavaloId, Prova prova);
 
+  /// Remove uma prova de um cavalo.
+  Future<void> removerProva(String cavaloId, String provaId);
+
+  /// Remove uma mídia de um cavalo.
+  Future<void> removerMidia(String cavaloId, String midiaId);
+
+  /// Insere ou atualiza várias provas de um cavalo de uma vez (importação).
+  Future<void> salvarProvas(String cavaloId, List<Prova> provas);
+
+  /// Lê no SGP as passadas do cavalo, sem gravar. Só o servidor consulta o SGP.
+  Future<ResultadoSgp> buscarProvasSgp(String cavaloId);
+
   /// Insere ou atualiza uma mídia de um cavalo.
   Future<void> salvarMidia(String cavaloId, Midia midia);
 
@@ -154,6 +166,28 @@ abstract interface class FonteDeDados {
 
   /// Define qual cavalo aparece no aplicativo do usuário.
   Future<void> definirPrincipal(String id);
+}
+
+/// Prévia da importação do SGP: as passadas que o site lista para o cavalo.
+class ResultadoSgp {
+  const ResultadoSgp({required this.encontrado, this.motivo, this.url, this.provas = const []});
+
+  /// Falso quando nenhum cavalo do SGP tem o mesmo nome e registro.
+  final bool encontrado;
+  final String? motivo;
+
+  /// Página pública do cavalo no SGP, para conferir.
+  final String? url;
+  final List<Prova> provas;
+
+  factory ResultadoSgp.fromJson(Map<String, dynamic> j) => ResultadoSgp(
+    encontrado: j['encontrado'] == true,
+    motivo: j['motivo'] as String?,
+    url: j['url'] as String?,
+    provas: [
+      for (final p in (j['provas'] as List?) ?? const []) Prova.fromJson(p as Map<String, dynamic>),
+    ],
+  );
 }
 
 /// Comportamento padrão para fontes sem gravação granular.
@@ -229,6 +263,37 @@ mixin GravacaoGranular implements FonteDeDados {
       ),
     );
   }
+
+  @override
+  Future<void> salvarProvas(String cavaloId, List<Prova> provas) async {
+    final atual = acervoAtual;
+    final alvo = atual.cavaloPorId(cavaloId);
+    if (alvo == null) {
+      throw ErroFonte('Cavalo $cavaloId não encontrado para gravar as provas.');
+    }
+    final porId = {for (final p in provas) p.id: p};
+    await salvarCavalo(
+      alvo.copiarCom(provas: [for (final p in alvo.provas) porId.remove(p.id) ?? p, ...porId.values]),
+    );
+  }
+
+  @override
+  Future<void> removerProva(String cavaloId, String provaId) async {
+    final alvo = acervoAtual.cavaloPorId(cavaloId);
+    if (alvo == null) return;
+    await salvarCavalo(alvo.copiarCom(provas: [for (final p in alvo.provas) if (p.id != provaId) p]));
+  }
+
+  @override
+  Future<void> removerMidia(String cavaloId, String midiaId) async {
+    final alvo = acervoAtual.cavaloPorId(cavaloId);
+    if (alvo == null) return;
+    await salvarCavalo(alvo.copiarCom(midias: [for (final m in alvo.midias) if (m.id != midiaId) m]));
+  }
+
+  @override
+  Future<ResultadoSgp> buscarProvasSgp(String cavaloId) async =>
+      throw const ErroFonte('A importação do SGP precisa do servidor: abra o painel publicado.');
 
   @override
   Future<String> enviarMidia(

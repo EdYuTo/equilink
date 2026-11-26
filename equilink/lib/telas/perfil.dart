@@ -305,11 +305,17 @@ class _TelaPerfilState extends State<TelaPerfil> {
       ),
     );
     if (resultado != null && resultado.isNotEmpty) {
-      await repositorio.atualizarDescricao(repositorio.cavaloObrigatorio.id, resultado);
-      repositorio.analytics.funil('conteudo', 'descricao_editada');
+      final ok = await repositorio.atualizarDescricao(repositorio.cavaloObrigatorio.id, resultado);
+      if (ok) repositorio.analytics.funil('conteudo', 'descricao_editada');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Descrição atualizada com sucesso.')),
+          SnackBar(
+            content: Text(
+              ok
+                  ? 'Descrição atualizada com sucesso.'
+                  : repositorio.erro ?? 'Não foi possível salvar a descrição.',
+            ),
+          ),
         );
       }
     }
