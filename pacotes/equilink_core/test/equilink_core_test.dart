@@ -81,7 +81,8 @@ void main() {
     late Repositorio repo;
 
     setUp(() async {
-      repo = Repositorio(FonteMemoria());
+      // Relógio fixo no dia dos dados de demonstração.
+      repo = Repositorio(FonteMemoria(), agora: () => DateTime(2026, 10, 14));
       await repo.carregar();
     });
 

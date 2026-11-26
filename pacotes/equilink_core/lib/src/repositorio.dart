@@ -18,7 +18,9 @@ enum EstadoCarga { inicial, carregando, pronto, erro }
 /// fonte; se a gravação falhar, [erro] é preenchido e o painel administrativo
 /// mostra a mensagem.
 class Repositorio extends ChangeNotifier {
-  Repositorio(this.fonte, {Analytics? analytics}) : analytics = analytics ?? Analytics(ColetorNulo());
+  Repositorio(this.fonte, {Analytics? analytics, DateTime Function()? agora})
+      : analytics = analytics ?? Analytics(ColetorNulo()),
+        _agora = agora ?? DateTime.now;
 
   final FonteDeDados fonte;
 
@@ -38,8 +40,17 @@ class Repositorio extends ChangeNotifier {
   String? _idEmFoco;
   String? _erroFoco;
 
-  /// Data de referência dos cálculos de idade (mantém os testes determinísticos).
-  final DateTime hoje = DateTime(2026, 10, 14);
+  /// Relógio do repositório. Os testes passam um relógio fixo.
+  final DateTime Function() _agora;
+
+  /// Data e hora atuais, usadas nas idades e nos registros de limpeza.
+  DateTime get hoje => _agora();
+
+  /// Hoje, no horário dado (lê o relógio uma vez só).
+  DateTime _hojeAs(int hora, [int minuto = 0]) {
+    final h = hoje;
+    return DateTime(h.year, h.month, h.day, hora, minuto);
+  }
 
   // ---------------------------------------------------------------------------
   // Estado
@@ -609,7 +620,7 @@ class Repositorio extends ChangeNotifier {
             numero: proximo,
             cavaloId: cavaloId,
             status: status,
-            ultimaLimpeza: DateTime(hoje.year, hoje.month, hoje.day, 7),
+            ultimaLimpeza: _hojeAs(7),
             manejo: [
               for (final t in modelo) t.copiarCom(id: '${t.id}-$proximo', concluida: false),
             ],
@@ -692,7 +703,7 @@ class Repositorio extends ChangeNotifier {
     (b) => b.copiarCom(
       status: status,
       ultimaLimpeza: status == StatusBaia.emDia
-          ? DateTime(hoje.year, hoje.month, hoje.day, 7, 10)
+          ? _hojeAs(7, 10)
           : b.ultimaLimpeza,
     ),
     evento: 'baia_status_alterado',
@@ -724,7 +735,7 @@ class Repositorio extends ChangeNotifier {
         return b.copiarCom(
           manejo: manejo,
           ultimaLimpeza: rotinaCompleta
-              ? DateTime(hoje.year, hoje.month, hoje.day, 17, 5)
+              ? _hojeAs(17, 5)
               : b.ultimaLimpeza,
         );
       },

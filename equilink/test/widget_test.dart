@@ -47,7 +47,8 @@ void main() {
 
   group('repositório', () {
     test('concluir toda a rotina atualiza a última limpeza', () async {
-      final repositorio = Repositorio(FonteMemoria());
+      // Relógio fixo no dia dos dados de demonstração.
+      final repositorio = Repositorio(FonteMemoria(), agora: () => DateTime(2026, 10, 14));
       await repositorio.carregar();
       final baia = repositorio.baia('01')!;
       final limpezaAnterior = baia.ultimaLimpeza;
