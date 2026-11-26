@@ -33,7 +33,8 @@ import { neon } from '@neondatabase/serverless';
 import { normalizarAncestral } from './genealogia.js';
 import { ErroSgp, provasDoSgp } from './sgp.js';
 import { gravarCavalo, gravarMidia, gravarProva, gravarProvasEmLote } from './gravacao.js';
-import { ErroValidacao, objeto, texto } from './validacao.js';
+import { erroDoBanco } from './erros.js';
+import { ErroValidacao, objeto, pareceUuid, texto } from './validacao.js';
 import {
   acessoDe,
   conferirSenha,
@@ -1054,6 +1055,12 @@ async function rotear(request, env, estado) {
       if (e instanceof ErroValidacao) {
         return erro(e.message, e.status, { cabecalhos: base });
       }
+      // Registro repetido ou valor fora do tipo da coluna: o operador consegue
+      // corrigir, então não é 500 (EQL-012).
+      const previsivel = erroDoBanco(e);
+      if (previsivel) {
+        return erro(previsivel.mensagem, previsivel.status, { cabecalhos: base });
+      }
       // Erro interno: a mensagem do banco pode conter SQL, nome de coluna ou
       // dado de outro haras. Loga com um id e devolve só o id.
       const idErro = crypto.randomUUID().slice(0, 8);
@@ -1398,6 +1405,9 @@ async function rotaSugestoes({ request, url, sql, acesso, base, partes, identida
   // /sugestoes/:id
   if (partes[1]) {
     const id = identificador(decodeURIComponent(partes[1]), 'id');
+    // `sugestoes.id` é uuid: outro formato não existe, e consultar com ele faz
+    // o Postgres falhar no cast em vez de não achar nada (EQL-012).
+    if (!pareceUuid(id)) return erro('Sugestão não encontrada.', 404, { cabecalhos: base });
     const existentes = await sql`
       select * from sugestoes
       where id = ${id} and haras_id = ${acesso.harasId} and usuario_id = ${autor}

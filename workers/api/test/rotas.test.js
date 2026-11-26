@@ -81,3 +81,56 @@ test('GET /eventos: anônimo continua recebendo 401', async (t) => {
   assert.equal(r.status, 401);
   assert.equal(r.corpo.erro, 'Autenticação necessária para ler a telemetria.');
 });
+
+// EQL-012 -------------------------------------------------------------------
+
+const cavalo = { nome: 'A', registro: 'P1', sexo: 'macho', nascimento: '2020-01-01' };
+
+test('PUT /cavalos/:id com registro repetido responde 409 sem vazar SQL', async (t) => {
+  bancoFalso(t, 'operador', () => ({
+    falha: {
+      message: 'duplicate key value violates unique constraint "cavalos_haras_id_registro_key"',
+      code: '23505',
+      constraint: 'cavalos_haras_id_registro_key',
+      table: 'cavalos',
+    },
+  }));
+  const r = await pedir('/cavalos/c2', { metodo: 'PUT', corpo: cavalo });
+  assert.equal(r.status, 409);
+  assert.equal(r.corpo.erro, 'Já existe um cavalo com este registro.');
+});
+
+test('valor em formato inválido para o banco responde 400', async (t) => {
+  bancoFalso(t, 'operador', () => ({
+    falha: { message: 'invalid input syntax for type uuid: "x"', code: '22P02' },
+  }));
+  const r = await pedir('/cavalos/c2', { metodo: 'PUT', corpo: cavalo });
+  assert.equal(r.status, 400);
+  assert.doesNotMatch(r.corpo.erro, /syntax|uuid/);
+});
+
+test('outro erro do banco continua 500 genérico', async (t) => {
+  bancoFalso(t, 'operador', () => ({ falha: { message: 'deadlock detected', code: '40P01' } }));
+  const r = await pedir('/cavalos/c2', { metodo: 'PUT', corpo: cavalo });
+  assert.equal(r.status, 500);
+  assert.equal(r.corpo.erro, 'Falha interna ao processar a requisição.');
+});
+
+test('GET /sugestoes/:id com id fora do formato uuid responde 404 sem consultar', async (t) => {
+  const consultas = bancoFalso(t, 'operador', () => ({
+    falha: { message: 'invalid input syntax for type uuid: "abc"', code: '22P02' },
+  }));
+  for (const metodo of ['GET', 'DELETE']) {
+    const r = await pedir('/sugestoes/abc', { metodo });
+    assert.equal(r.status, 404, metodo);
+    assert.equal(r.corpo.erro, 'Sugestão não encontrada.');
+  }
+  assert.ok(!consultas.some((q) => q.includes('from sugestoes')));
+});
+
+test('GET /sugestoes/:id com uuid válido consulta o banco', async (t) => {
+  const consultas = bancoFalso(t, 'operador', () => []);
+  const r = await pedir('/sugestoes/3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f');
+  assert.equal(r.status, 404);
+  assert.ok(consultas.some((q) => q.includes('from sugestoes')));
+});
