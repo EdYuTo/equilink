@@ -61,10 +61,10 @@ void main() {
     await salvar(tester);
 
     expect(find.byType(AlertDialog), findsOneWidget, reason: 'o diálogo continua aberto');
-    expect(find.text('Informe o nome da prova.'), findsOneWidget);
-    expect(find.text('Use um número inteiro, como 1 ou 2 (0 = sem colocação).'), findsOneWidget);
-    expect(find.text('Use só números, como 16,742 ou 16.742.'), findsOneWidget);
-    expect(find.text('Use um número inteiro, como 20.'), findsOneWidget);
+    expect(find.text('Informe o nome.'), findsOneWidget);
+    expect(find.text('Só números inteiros, como 1.'), findsOneWidget);
+    expect(find.text('Só números, como 16,742.'), findsOneWidget);
+    expect(find.text('Só números inteiros, como 20.'), findsOneWidget);
     expect((await provasGravadas()).length, antes, reason: 'nada foi gravado');
   });
 

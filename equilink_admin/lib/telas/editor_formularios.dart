@@ -902,17 +902,17 @@ class AbaProvas extends StatelessWidget {
     required String tempo,
     required String inscritos,
   }) => {
-    if (nome.trim().isEmpty) 'nome': 'Informe o nome da prova.',
+    if (nome.trim().isEmpty) 'nome': 'Informe o nome.',
     if (colocacao.trim().isEmpty)
-      'colocacao': 'Informe a colocação (0 = sem colocação).'
+      'colocacao': 'Obrigatório. Use 0 se não houver.'
     else if (!_inteiro.hasMatch(colocacao.trim()))
-      'colocacao': 'Use um número inteiro, como 1 ou 2 (0 = sem colocação).',
+      'colocacao': 'Só números inteiros, como 1.',
     if (tempo.trim().isEmpty)
-      'tempo': 'Informe o tempo (0 = passada sem tempo).'
+      'tempo': 'Obrigatório. Use 0 se não houver.'
     else if (_lerDecimal(tempo) == null)
-      'tempo': 'Use só números, como 16,742 ou 16.742.',
+      'tempo': 'Só números, como 16,742.',
     if (inscritos.trim().isNotEmpty && !_inteiro.hasMatch(inscritos.trim()))
-      'inscritos': 'Use um número inteiro, como 20.',
+      'inscritos': 'Só números inteiros, como 20.',
   };
 
   // Até 9 dígitos: o bastante para qualquer colocação ou inscrição, sem estourar o int.
