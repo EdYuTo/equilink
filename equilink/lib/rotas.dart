@@ -55,6 +55,9 @@ GoRouter criarRoteador({void Function(String rota)? aoNavegar, bool baias = fals
     navigatorKey: chaveRaiz,
     initialLocation: Rotas.perfil,
     redirect: _manterAnimalNaUrl,
+    // Endereço digitado errado ou link antigo: página em português com saída
+    // para o perfil, no lugar da página padrão em inglês do go_router.
+    errorBuilder: (context, state) => const TelaNaoEncontrada(),
     observers: [
       if (aoNavegar != null)
         _ObservadorNavegacao(aoNavegar),
@@ -198,6 +201,50 @@ class _FocoDaUrlState extends State<_FocoDaUrl> {
       });
     }
     return const ColoredBox(color: Cores.fundo, child: SizedBox.expand());
+  }
+}
+
+/// Página de endereço inexistente.
+class TelaNaoEncontrada extends StatelessWidget {
+  const TelaNaoEncontrada({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Cores.fundo,
+      appBar: AppBar(title: const LogoEquilink(), automaticallyImplyLeading: false),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.all(Espacos.x5),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.search_off, size: 38, color: Cores.dourado),
+                const SizedBox(height: Espacos.x4),
+                const Text(
+                  'Página não encontrada',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Cores.texto),
+                ),
+                const SizedBox(height: Espacos.x2),
+                const Text(
+                  'O endereço não existe ou mudou. Confira o link ou abra o perfil.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12.5, color: Cores.textoSecundario, height: 1.5),
+                ),
+                const SizedBox(height: Espacos.x4),
+                FilledButton(
+                  onPressed: () => context.go(Rotas.perfil),
+                  child: const Text('Ir para o perfil'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -573,6 +573,17 @@ void main() {
       expect(find.text('ISABEL TORO LEO'), findsOneWidget);
       expect(urlAtual(tester), '/perfil');
     });
+
+    testWidgets('endereço desconhecido mostra a página em português (EQL-027)', (tester) async {
+      await abrirEm(tester, '/naoexiste');
+      expect(find.text('Page Not Found'), findsNothing);
+      expect(find.text('Página não encontrada'), findsOneWidget);
+
+      await tester.tap(find.text('Ir para o perfil'));
+      await tester.pumpAndSettle();
+      expect(find.text('ISABEL TORO LEO'), findsOneWidget);
+      expect(urlAtual(tester), '/perfil');
+    });
   });
 
   group('acesso do proprietário', () {
