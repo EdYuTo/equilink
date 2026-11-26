@@ -253,7 +253,10 @@ class _TelaNovoCavaloState extends State<TelaNovoCavalo> {
       return;
     }
 
-    // Foto: envia com o cavalo já gravado, para a API aceitar o upload.
+    // Foto: envia com o cavalo já gravado, para a API aceitar o upload. Se
+    // falhar, o animal fica com a imagem padrão e o aviso diz isso — antes a
+    // falha só aparecia na faixa vermelha e o cadastro parecia completo.
+    String? falhaFoto;
     if (_fotoBytes != null) {
       final url = await rep.enviarMidia(
         idFinal,
@@ -261,9 +264,13 @@ class _TelaNovoCavaloState extends State<TelaNovoCavalo> {
         tipoConteudo: _fotoTipo!,
         nomeArquivo: _fotoNome!,
       );
-      if (url != null) {
+      if (url == null) {
+        falhaFoto = rep.erro ?? 'erro desconhecido.';
+      } else {
         foto = url;
-        await rep.salvarCavalo(novo.copiarCom(fotoPerfil: url));
+        if (!await rep.salvarCavalo(novo.copiarCom(fotoPerfil: url))) {
+          falhaFoto = rep.erro ?? 'erro desconhecido.';
+        }
       }
     }
 
@@ -274,7 +281,12 @@ class _TelaNovoCavaloState extends State<TelaNovoCavalo> {
     if (!mounted) return;
     context.go(RotasAdmin.cavalo(idFinal));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${novo.nome} cadastrado.')),
+      falhaFoto == null
+          ? SnackBar(content: Text('${novo.nome} cadastrado.'))
+          : SnackBar(
+              duration: const Duration(seconds: 8),
+              content: Text('${novo.nome} cadastrado, mas a foto não foi enviada: $falhaFoto'),
+            ),
     );
   }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -49,8 +50,20 @@ class FonteHttp implements FonteDeDados {
   /// de serviço em [cabecalhos].
   final bool usarCookies;
 
+  /// Prazo das chamadas JSON. O envio de mídia usa [prazoEnvio].
   final Duration tempoLimite;
   final http.Client _cliente;
+
+  /// Prazo do envio de um arquivo de [bytes]: 60 s, ou o tempo de subir o
+  /// arquivo a 256 KiB/s (cerca de 2 Mbit/s), o que for maior.
+  ///
+  /// Com os 20 s das chamadas JSON, um vídeo bem abaixo do limite de 50 MB da
+  /// API falhava numa conexão comum de celular.
+  static Duration prazoEnvio(int bytes) {
+    final proporcional = Duration(milliseconds: bytes * 1000 ~/ (256 * 1024));
+    const minimo = Duration(seconds: 60);
+    return proporcional > minimo ? proporcional : minimo;
+  }
 
   @override
   String get descricao => 'API REST ($base)';
@@ -257,7 +270,7 @@ class FonteHttp implements FonteDeDados {
             },
             body: bytes,
           )
-          .timeout(tempoLimite);
+          .timeout(prazoEnvio(bytes.length));
 
       if (resposta.statusCode != 201) {
         if (resposta.statusCode >= 400) _recusar(resposta, 'enviar a mídia');
@@ -275,6 +288,11 @@ class FonteHttp implements FonteDeDados {
       return arquivo;
     } on ErroFonte {
       rethrow;
+    } on TimeoutException catch (erro) {
+      throw ErroFonte(
+        'O envio demorou demais. Tente de novo pelo Wi-Fi ou com um arquivo menor.',
+        causa: erro,
+      );
     } catch (erro) {
       throw ErroFonte('Não foi possível enviar a mídia.', causa: erro);
     }

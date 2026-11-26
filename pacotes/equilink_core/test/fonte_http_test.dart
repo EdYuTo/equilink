@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:equilink_core/equilink_core.dart';
@@ -79,6 +80,40 @@ void main() {
       await expectLater(
         _fonte(403, {'outro': 1}).removerCavalo('c1'),
         _erro<ErroPermissao>('Seu perfil não permite remover /cavalos/c1.', 403),
+      );
+    });
+  });
+
+  /// EQL-035: o envio de mídia tem prazo próprio, proporcional ao arquivo.
+  group('prazo do envio de mídia', () {
+    test('é de pelo menos 60 s e cresce a 256 KiB/s', () {
+      expect(FonteHttp.prazoEnvio(1024), const Duration(seconds: 60));
+      expect(FonteHttp.prazoEnvio(30 * 1024 * 1024), const Duration(seconds: 120));
+    });
+
+    testWidgets('não estoura em 20 s e, quando estoura, explica', (tester) async {
+      final fonte = FonteHttp(
+        base: 'https://api.exemplo',
+        cliente: MockClient((_) => Completer<http.Response>().future),
+      );
+      Object? erro;
+      unawaited(
+        fonte
+            .enviarMidia('c1', bytes: const [1, 2, 3], tipoConteudo: 'image/png', nomeArquivo: 'a.png')
+            .then<void>((_) {}, onError: (Object e) => erro = e),
+      );
+
+      await tester.pump(const Duration(seconds: 59));
+      expect(erro, isNull, reason: 'o prazo das chamadas JSON (20 s) não vale para o envio');
+
+      await tester.pump(const Duration(seconds: 2));
+      expect(
+        erro,
+        isA<ErroFonte>().having(
+          (e) => e.mensagem,
+          'mensagem',
+          'O envio demorou demais. Tente de novo pelo Wi-Fi ou com um arquivo menor.',
+        ),
       );
     });
   });
