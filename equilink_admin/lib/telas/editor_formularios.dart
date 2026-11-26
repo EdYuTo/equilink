@@ -690,16 +690,19 @@ class AbaProvas extends StatelessWidget {
 
   Future<void> _editar(BuildContext context, Prova? prova) async {
     final rep = AdminEscopo.de(context);
-    final nome = TextEditingController(text: prova?.nome ?? 'Três Tambores');
+    // Prova nova começa vazia: os exemplos pré-preenchidos acabavam gravados
+    // sem que ninguém os tivesse digitado.
+    final nome = TextEditingController(text: prova?.nome ?? '');
     final local = TextEditingController(text: prova?.local ?? '');
-    final categoria = TextEditingController(text: prova?.categoria ?? 'Aberta');
-    final colocacao = TextEditingController(text: '${prova?.colocacao ?? 1}');
+    final categoria = TextEditingController(text: prova?.categoria ?? '');
+    final colocacao = TextEditingController(text: prova == null ? '' : '${prova.colocacao}');
     final tempo = TextEditingController(
       text: prova == null ? '' : prova.tempoSegundos.toStringAsFixed(3).replaceAll('.', ','),
     );
-    final inscritos = TextEditingController(text: '${prova?.inscritos ?? 20}');
+    final inscritos = TextEditingController(text: prova == null ? '' : '${prova.inscritos}');
     final premiacao = TextEditingController(text: prova?.premiacao ?? '');
     var data = prova?.data ?? DateTime.now();
+    var erros = <String, String>{};
 
     final salvar = await showDialog<bool>(
       context: context,
@@ -714,7 +717,7 @@ class AbaProvas extends StatelessWidget {
                 children: [
                   _Linha(
                     filhos: [
-                      _Campo(nome: 'Prova', controlador: nome),
+                      _Campo(nome: 'Prova', controlador: nome, erro: erros['nome']),
                       _Campo(nome: 'Categoria', controlador: categoria),
                     ],
                   ),
@@ -735,14 +738,18 @@ class AbaProvas extends StatelessWidget {
                   const SizedBox(height: 12),
                   _Linha(
                     filhos: [
-                      _Campo(nome: 'Colocação', controlador: colocacao),
-                      _Campo(nome: 'Tempo em segundos (ex.: 16,742)', controlador: tempo),
+                      _Campo(nome: 'Colocação', controlador: colocacao, erro: erros['colocacao']),
+                      _Campo(
+                        nome: 'Tempo em segundos (ex.: 16,742)',
+                        controlador: tempo,
+                        erro: erros['tempo'],
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
                   _Linha(
                     filhos: [
-                      _Campo(nome: 'Inscritos', controlador: inscritos),
+                      _Campo(nome: 'Inscritos', controlador: inscritos, erro: erros['inscritos']),
                       _Campo(nome: 'Premiação (opcional)', controlador: premiacao),
                     ],
                   ),
@@ -752,7 +759,22 @@ class AbaProvas extends StatelessWidget {
           ),
           actions: [
             TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
-            FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Salvar')),
+            FilledButton(
+              onPressed: () {
+                final encontrados = _errosProva(
+                  nome: nome.text,
+                  colocacao: colocacao.text,
+                  tempo: tempo.text,
+                  inscritos: inscritos.text,
+                );
+                if (encontrados.isEmpty) {
+                  Navigator.of(context).pop(true);
+                } else {
+                  atualizar(() => erros = encontrados);
+                }
+              },
+              child: const Text('Salvar'),
+            ),
           ],
         ),
       ),
@@ -765,10 +787,10 @@ class AbaProvas extends StatelessWidget {
       nome: nome.text.trim(),
       local: local.text.trim(),
       categoria: categoria.text.trim(),
-      colocacao: int.tryParse(colocacao.text.trim()) ?? 1,
-      tempoSegundos:
-          double.tryParse(tempo.text.trim().replaceAll('.', '').replaceAll(',', '.')) ?? 0,
-      inscritos: int.tryParse(inscritos.text.trim()) ?? 0,
+      // Já validados em _errosProva: aqui não há mais valor ilegível.
+      colocacao: int.parse(colocacao.text.trim()),
+      tempoSegundos: _lerDecimal(tempo.text)!,
+      inscritos: inscritos.text.trim().isEmpty ? 0 : int.parse(inscritos.text.trim()),
       premiacao: premiacao.text.trim().isEmpty ? null : premiacao.text.trim(),
     );
 
@@ -779,6 +801,40 @@ class AbaProvas extends StatelessWidget {
         SnackBar(content: Text(rep.erro ?? 'Não foi possível salvar a prova.')),
       );
     }
+  }
+
+  /// Erros do formulário de prova, por campo; vazio quando dá para gravar.
+  ///
+  /// Antes o texto ilegível virava 0 s no tempo e 1º na colocação (uma vitória
+  /// inventada), e "16.742" virava 16742 s.
+  static Map<String, String> _errosProva({
+    required String nome,
+    required String colocacao,
+    required String tempo,
+    required String inscritos,
+  }) => {
+    if (nome.trim().isEmpty) 'nome': 'Informe o nome da prova.',
+    if (colocacao.trim().isEmpty)
+      'colocacao': 'Informe a colocação (0 = sem colocação).'
+    else if (!_inteiro.hasMatch(colocacao.trim()))
+      'colocacao': 'Use um número inteiro, como 1 ou 2 (0 = sem colocação).',
+    if (tempo.trim().isEmpty)
+      'tempo': 'Informe o tempo (0 = passada sem tempo).'
+    else if (_lerDecimal(tempo) == null)
+      'tempo': 'Use só números, como 16,742 ou 16.742.',
+    if (inscritos.trim().isNotEmpty && !_inteiro.hasMatch(inscritos.trim()))
+      'inscritos': 'Use um número inteiro, como 20.',
+  };
+
+  // Até 9 dígitos: o bastante para qualquer colocação ou inscrição, sem estourar o int.
+  static final _inteiro = RegExp(r'^\d{1,9}$');
+
+  /// Lê "16,742" ou "16.742" como 16,742: um único ponto ou vírgula é a
+  /// casa decimal. Devolve `null` para qualquer outra coisa.
+  static double? _lerDecimal(String texto) {
+    final t = texto.trim();
+    if (!RegExp(r'^\d+([.,]\d+)?$').hasMatch(t)) return null;
+    return double.parse(t.replaceAll(',', '.'));
   }
 
   /// Busca as passadas no SGP, mostra a prévia e só grava se a pessoa confirmar.
@@ -1879,18 +1935,21 @@ class _Linha extends StatelessWidget {
 }
 
 class _Campo extends StatelessWidget {
-  const _Campo({required this.nome, required this.controlador, this.linhas = 1});
+  const _Campo({required this.nome, required this.controlador, this.linhas = 1, this.erro});
 
   final String nome;
   final TextEditingController controlador;
   final int linhas;
+
+  /// Texto de erro mostrado sob o campo; `null` quando está válido.
+  final String? erro;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controlador,
       maxLines: linhas,
-      decoration: InputDecoration(labelText: nome),
+      decoration: InputDecoration(labelText: nome, errorText: erro, errorMaxLines: 3),
     );
   }
 }
