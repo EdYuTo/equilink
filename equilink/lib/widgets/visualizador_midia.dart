@@ -44,14 +44,30 @@ class VisualizadorEscopo extends InheritedNotifier<VisualizadorController> {
 }
 
 /// Visualizador em tela cheia para fotos e vídeos.
-class VisualizadorMidia extends StatelessWidget {
+class VisualizadorMidia extends StatefulWidget {
   const VisualizadorMidia({super.key, required this.midia, required this.aoFechar});
 
   final Midia midia;
   final VoidCallback aoFechar;
 
   @override
+  State<VisualizadorMidia> createState() => _VisualizadorMidiaState();
+}
+
+class _VisualizadorMidiaState extends State<VisualizadorMidia> {
+  /// Duração lida do vídeo carregado, para mídias sem `duracaoSegundos`.
+  Duration? _duracaoCarregada;
+
+  @override
+  void didUpdateWidget(VisualizadorMidia anterior) {
+    super.didUpdateWidget(anterior);
+    if (anterior.midia.id != widget.midia.id) _duracaoCarregada = null;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final midia = widget.midia;
+    final segundos = midia.duracaoSegundos ?? _duracaoCarregada?.inSeconds;
     // Fica fora do Scaffold das telas: sem Material, os textos saem com o estilo
     // de erro do Flutter (sublinhado amarelo).
     return Material(
@@ -65,7 +81,7 @@ class VisualizadorMidia extends StatelessWidget {
                 children: [
                   IconButton(
                     tooltip: 'Fechar',
-                    onPressed: aoFechar,
+                    onPressed: widget.aoFechar,
                     icon: const Icon(Icons.close, color: Colors.white),
                   ),
                   Expanded(
@@ -80,11 +96,11 @@ class VisualizadorMidia extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (midia.tipo == TipoMidia.video)
+                  if (midia.tipo == TipoMidia.video && segundos != null)
                     Padding(
                       padding: const EdgeInsets.only(right: Espacos.x3),
                       child: Text(
-                        duracaoVideo(midia.duracaoSegundos ?? 0),
+                        duracaoVideo(segundos),
                         style: const TextStyle(color: Colors.white70, fontSize: 13),
                       ),
                     ),
@@ -98,7 +114,13 @@ class VisualizadorMidia extends StatelessWidget {
                         maxScale: 5,
                         child: ImagemMidia(midia.arquivo, ajuste: BoxFit.contain),
                       )
-                    : PlayerVideo(midia: midia, alturaMaxima: double.infinity),
+                    : PlayerVideo(
+                        midia: midia,
+                        alturaMaxima: double.infinity,
+                        aoCarregar: (duracao) {
+                          if (mounted) setState(() => _duracaoCarregada = duracao);
+                        },
+                      ),
               ),
             ),
             if (midia.local != null)
@@ -123,12 +145,38 @@ class VisualizadorMidia extends StatelessWidget {
   }
 }
 
-/// Reprodução de vídeo empacotado no aplicativo, com controles de toque.
+/// Controlador do vídeo: pela rede para URL (vídeo enviado pelo painel) e
+/// pelo pacote do aplicativo para os vídeos de demonstração.
+VideoPlayerController controladorDoVideo(String arquivo) =>
+    arquivo.startsWith('http://') || arquivo.startsWith('https://')
+        ? VideoPlayerController.networkUrl(Uri.parse(arquivo))
+        : VideoPlayerController.asset(arquivo);
+
+/// Capa do vídeo. Sem capa própria, um fundo neutro: a foto de demonstração
+/// mostrava um cavalo que não é o do vídeo.
+class CapaVideo extends StatelessWidget {
+  const CapaVideo(this.midia, {super.key});
+
+  final Midia midia;
+
+  @override
+  Widget build(BuildContext context) {
+    final poster = midia.poster?.trim() ?? '';
+    if (poster.isEmpty) return const ColoredBox(color: Cores.escuro, child: SizedBox.expand());
+    return ImagemMidia(poster, ajuste: BoxFit.cover);
+  }
+}
+
+/// Reprodução de vídeo (URL do bucket ou vídeo empacotado), com controles de
+/// toque.
 class PlayerVideo extends StatefulWidget {
-  const PlayerVideo({super.key, required this.midia, this.alturaMaxima = 380});
+  const PlayerVideo({super.key, required this.midia, this.alturaMaxima = 380, this.aoCarregar});
 
   final Midia midia;
   final double alturaMaxima;
+
+  /// Recebe a duração do vídeo assim que ele carrega.
+  final ValueChanged<Duration>? aoCarregar;
 
   @override
   State<PlayerVideo> createState() => _PlayerVideoState();
@@ -156,7 +204,7 @@ class _PlayerVideoState extends State<PlayerVideo> {
       _carregando = true;
       _erro = false;
     });
-    final controlador = VideoPlayerController.asset(widget.midia.arquivo);
+    final controlador = controladorDoVideo(widget.midia.arquivo);
     try {
       await controlador.initialize();
       controlador.setLooping(true);
@@ -169,6 +217,7 @@ class _PlayerVideoState extends State<PlayerVideo> {
         _controlador = controlador;
         _carregando = false;
       });
+      widget.aoCarregar?.call(controlador.value.duration);
     } catch (_) {
       await controlador.dispose();
       if (!mounted) return;
@@ -208,10 +257,7 @@ class _PlayerVideoState extends State<PlayerVideo> {
                 : Stack(
                     fit: StackFit.expand,
                     children: [
-                      ImagemMidia(
-                        widget.midia.poster ?? MidiaPadrao.capaVideo,
-                        ajuste: BoxFit.cover,
-                      ),
+                      CapaVideo(widget.midia),
                       ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
                       Center(
                         child: _carregando

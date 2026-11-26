@@ -527,10 +527,7 @@ class _ListaVideos extends StatelessWidget {
                   children: [
                     AspectRatio(
                       aspectRatio: 16 / 9,
-                      child: ImagemMidia(
-                        video.poster ?? MidiaPadrao.capaVideo,
-                        ajuste: BoxFit.cover,
-                      ),
+                      child: CapaVideo(video),
                     ),
                     Positioned.fill(
                       child: ColoredBox(
@@ -546,7 +543,7 @@ class _ListaVideos extends StatelessWidget {
                         ),
                       ),
                     ),
-                    Positioned(
+                    if (video.duracaoSegundos != null) Positioned(
                       right: Espacos.x2,
                       bottom: Espacos.x2,
                       child: Container(
@@ -559,7 +556,7 @@ class _ListaVideos extends StatelessWidget {
                           borderRadius: BorderRadius.circular(Raios.total),
                         ),
                         child: Text(
-                          duracaoVideo(video.duracaoSegundos ?? 0),
+                          duracaoVideo(video.duracaoSegundos!),
                           style: const TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w600,

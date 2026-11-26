@@ -111,16 +111,14 @@ class _TelaMidiasState extends State<TelaMidias> {
                           );
                           visualizador.abrir(destaque[i]);
                         },
-                      child: ImagemMidia(
-                        destaque[i].tipo == TipoMidia.foto
-                            ? destaque[i].arquivo
-                            : destaque[i].poster ?? MidiaPadrao.capaVideo,
-                        ajuste: BoxFit.cover,
-                      ),
+                      child: destaque[i].tipo == TipoMidia.foto
+                          ? ImagemMidia(destaque[i].arquivo, ajuste: BoxFit.cover)
+                          : CapaVideo(destaque[i]),
                     ),
                   ),
                   if (destaque.isNotEmpty &&
-                      destaque[_pagina].tipo == TipoMidia.video)
+                      destaque[_pagina].tipo == TipoMidia.video &&
+                      destaque[_pagina].duracaoSegundos != null)
                     Positioned(
                       right: Espacos.x3,
                       bottom: Espacos.x3,
@@ -134,7 +132,7 @@ class _TelaMidiasState extends State<TelaMidias> {
                           borderRadius: BorderRadius.circular(Raios.total),
                         ),
                         child: Text(
-                          duracaoVideo(destaque[_pagina].duracaoSegundos ?? 0),
+                          duracaoVideo(destaque[_pagina].duracaoSegundos!),
                           style: const TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w600,
@@ -266,10 +264,7 @@ class _TelaMidiasState extends State<TelaMidias> {
                           children: [
                             AspectRatio(
                               aspectRatio: 16 / 9,
-                              child: ImagemMidia(
-                                video.poster ?? MidiaPadrao.capaVideo,
-                                ajuste: BoxFit.cover,
-                              ),
+                              child: CapaVideo(video),
                             ),
                             Positioned.fill(
                               child: ColoredBox(
@@ -285,7 +280,7 @@ class _TelaMidiasState extends State<TelaMidias> {
                                 ),
                               ),
                             ),
-                            Positioned(
+                            if (video.duracaoSegundos != null) Positioned(
                               right: Espacos.x3,
                               bottom: Espacos.x3,
                               child: Container(
@@ -300,7 +295,7 @@ class _TelaMidiasState extends State<TelaMidias> {
                                   ),
                                 ),
                                 child: Text(
-                                  duracaoVideo(video.duracaoSegundos ?? 0),
+                                  duracaoVideo(video.duracaoSegundos!),
                                   style: const TextStyle(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w600,

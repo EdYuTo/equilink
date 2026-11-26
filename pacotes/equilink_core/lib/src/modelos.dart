@@ -344,7 +344,8 @@ class Midia {
   final String id;
   final TipoMidia tipo;
 
-  /// Caminho do asset (fotos) ou do vídeo empacotado no aplicativo.
+  /// URL da mídia enviada pelo painel, ou caminho do asset empacotado no
+  /// aplicativo (dados de demonstração).
   final String arquivo;
   final String legenda;
   final int? duracaoSegundos;
